@@ -1,56 +1,59 @@
 # Generative Atmospheric Super-Resolution across Heterogeneous Observing Systems through Composable Interfaces
 
-Research code supporting the manuscript **Generative Atmospheric
-Super-Resolution across Heterogeneous Observing Systems through Composable
-Interfaces**.
+[Release v1.0.0](https://github.com/ISCLPurdue/generative_multimodal_atmospheric_super_resolution/releases/tag/v1.0.0)
+· [Data and model inputs](DATA.md)
+· [Reproduction](reproduction/README.md)
+· [Reported analyses](analysis/README.md)
+· [Citation](#citation)
 
-The repository implements diffusion posterior sampling with a fixed
-13-variable atmospheric diffusion prior and three observation sources:
+This repository provides the research code and experiment metadata supporting
+the manuscript *Generative Atmospheric Super-Resolution across Heterogeneous
+Observing Systems through Composable Interfaces*. It implements diffusion
+posterior sampling with a fixed 13-variable atmospheric diffusion prior and
+three observation sources:
 
-- **R**: IGRA radiosonde profiles
-- **A**: NOAA MADIS aircraft reports
-- **S**: NOAA MADIS METAR surface-station reports
+- **R:** radiosonde profiles from the Integrated Global Radiosonde Archive
+  (IGRA);
+- **A:** aircraft reports from the NOAA Meteorological Assimilation Data Ingest
+  System (MADIS) Aircraft Based Observations (ABO) product; and
+- **S:** surface-station reports from the NOAA MADIS Meteorological Aerodrome
+  Report (METAR) product.
 
 The observation interfaces specify which measurements are retained, how they
-are mapped to the gridded state, how residuals are counted, and how each
-source contributes to the likelihood. The paper develops and calibrates these
+are mapped to the gridded state, how residuals are counted, and how each source
+contributes to the likelihood. The paper develops and calibrates these
 interfaces with 2019 observations and evaluates the selected configuration at
 723 analysis times in 2020.
 
-## Repository status
+![Annual spatial distributions of the three observation sources](docs/figures/observation_sources_2020.png)
 
-This public research snapshot was prepared from internal source revision
-`5875fe981a77a00a3d1392d24f84b8285cf48a41`, the revision recorded for the
-paper experiments. That internal hash is retained only as provenance and is
-not part of the cleaned public Git history; cite the public release rather
-than the internal revision. The wrappers in `reproduction/` expose data and
-checkpoint locations as command-line arguments, so they do not require the
-original Purdue filesystem layout.
+*Annual 2020 spatial distributions of IGRA radiosonde profiles (R), MADIS ABO
+aircraft reports (A), and MADIS METAR surface-station reports (S). Dashed boxes
+mark the CONUS domain used for A and S.*
 
-The repository does **not** include ERA5 fields, NOAA observations, processed
-observation products, trained model weights, or generated posterior samples.
-See [DATA.md](DATA.md) for the expected inputs and their public providers.
-The compact numerical summaries and scripts supporting the reported analyses
-are collected under [`analysis/`](analysis/README.md).
+## Main result
 
-## Main entry points
+Across 723 matched analysis times in 2020, R+A+S reduced the mean CONUS RMSE
+across all 13 state variables by **9.24%** and the corresponding CRPS by
+**9.98%** relative to R-only conditioning.
 
-- `src/igra_gen/run_aircraft_13var_persistent.py`: persistent posterior
-  sampler and R/A/S observation operators
-- `scripts/preprocess_madis_aircraft_13var_npz.py`: MADIS aircraft processing
-- `scripts/preprocess_madis_metar_13var_npz.py`: MADIS METAR processing
-- `scripts/download_igra_noaa_por.py` and
-  `scripts/build_igra_from_noaa_por.py`: IGRA acquisition and construction
-- `scripts/run_independent_year_2019_*.py`: 2019 interface development and
-  likelihood-parameter selection
-- `reproduction/run_2020_evaluation.py`: R-only, R+A, R+S, and R+A+S annual
-  posterior-sampling wrapper
-- `reproduction/run_2020_holdout.py`: aircraft and surface-station held-out
-  conditioning posterior-sampling wrapper
-- `reproduction/create_2020_holdout_split.py`: deterministic construction of
-  the retained 80% and excluded 20% targets used by the held-out evaluation
+![Grouped mean RMSE changes over the CONUS domain](docs/figures/grouped_rmse_changes_conus.png)
 
-## Environment
+*Grouped mean RMSE changes for R+A, R+S, and R+A+S relative to R-only
+conditioning. Negative values indicate lower RMSE.*
+
+## Repository map
+
+| Goal | Start here |
+|---|---|
+| Run the 2020 experiments | [`reproduction/`](reproduction/README.md) |
+| Prepare the required inputs | [`DATA.md`](DATA.md) |
+| Reproduce reported analyses | [`analysis/`](analysis/README.md) |
+| Inspect the sampler and observation interfaces | [`src/igra_gen/`](src/igra_gen/) |
+| Inspect preprocessing and interface-development scripts | [`scripts/`](scripts/) |
+| Run configuration and paper-alignment checks | [`tests/`](tests/) |
+
+## Quick start
 
 The experiments used Python 3.11 and PyTorch on NVIDIA A100 GPUs. Create an
 environment and install the Python dependencies with:
@@ -63,67 +66,49 @@ python -m pip install -r requirements.txt
 export PYTHONPATH="$PWD/src:${PYTHONPATH:-}"
 ```
 
-The trained atmospheric prior is required for posterior sampling but is not
-distributed in this repository. The Hydra configuration supplied with that
-checkpoint and the ERA5 normalization files must be provided to the public
-evaluation wrappers.
-
-## Reproducing the 2020 posterior samples
-
-The selected observation-interface settings are recorded in
-`reproduction/config/selected_interface_2019.json`, and the 723 evaluation
-indices are in `reproduction/manifests/evaluation_timesteps_2020.json`.
-
-For example, an R+A+S run is launched as follows:
+Inspect the annual evaluation interface with:
 
 ```bash
-python reproduction/run_2020_evaluation.py \
-  --configuration R+A+S \
-  --checkpoint /path/to/checkpoint.pt \
-  --hydra-config /path/to/checkpoint_hydra_config.yaml \
-  --era5-root /path/to/era5_1.40625deg \
-  --igra-pkl /path/to/igra_2020.pkl \
-  --aircraft-root /path/to/processed_madis_aircraft_2020 \
-  --surface-root /path/to/processed_madis_metar_2020 \
-  --output-root /path/to/output
+python reproduction/run_2020_evaluation.py --help
 ```
 
-Use `--configuration R`, `R+A`, or `R+S` for the matched comparisons. Run
-`python reproduction/run_2020_evaluation.py --help` for the complete interface.
+The complete annual and held-out-observation commands are documented in
+[`reproduction/README.md`](reproduction/README.md).
 
-These wrappers reproduce the posterior-sampling stage. They do not by
-themselves compute RMSE, CRPS, ensemble spread and coverage, moving-block
-bootstrap intervals, or manuscript figures and tables. The held-out wrapper
-likewise consumes observation roots produced by
-`reproduction/create_2020_holdout_split.py`, in which the retained 80% of
-targets are stored under `obs/`; the excluded 20% are stored under
-`heldout_obs/` for separate analysis.
+## Data and model requirements
 
-## Scope and provenance
+This repository does not redistribute ERA5 fields, NOAA observations,
+processed observation products, trained model weights, or generated posterior
+samples. Their expected roles and public providers are documented in
+[`DATA.md`](DATA.md). The public wrappers accept all data, checkpoint, and
+output locations as command-line arguments and do not require the original
+Purdue filesystem layout.
 
-This snapshot preserves the research implementation used for the paper. The
-paper workflow is identified explicitly above and in
-`reproduction/README.md`. Historical development records under
-`configs/independent_year_2019/development_history/` may contain the original
-Purdue filesystem paths and internal identifiers such as
-`legacy_keep015`, `superob`, or `strat24` as provenance strings. These are
-development records, not names for the final public interfaces, and they do
-not contain the referenced data.
+The selected interface settings are recorded in
+[`reproduction/config/selected_interface_2019.json`](reproduction/config/selected_interface_2019.json),
+and the fixed annual and held-out evaluation times are recorded under
+[`reproduction/manifests/`](reproduction/manifests/). The wrappers reproduce
+the posterior-sampling stage; downstream scripts and compact numerical
+summaries are documented under [`analysis/`](analysis/README.md).
+
+## Citation
+
+Citation metadata are provided in [`CITATION.cff`](CITATION.cff). For a fixed
+software snapshot, please cite the
+[`v1.0.0` release](https://github.com/ISCLPurdue/generative_multimodal_atmospheric_super_resolution/releases/tag/v1.0.0).
+The associated manuscript citation will be added after the preprint is posted.
+This repository does not require a Zenodo DOI.
+
+## License
 
 Third-party code embedded in individual source files retains its original
 copyright and license notices. No project-wide license has yet been assigned;
 all rights not covered by those notices are reserved by the authors.
 
-## Citation
-
-Citation metadata are provided in [`CITATION.cff`](CITATION.cff). After the
-first versioned GitHub Release is created, cite that fixed release rather than
-the moving default branch. This repository does not require a Zenodo DOI.
-
 ## Acknowledgments
 
-We acknowledge support from DARPA Award: HR0011-26-3-E050, POC: Yannis
-Kevrekidis.
+We acknowledge support from DARPA Award HR0011-26-3-E050 (POC: Yannis
+Kevrekidis).
 
 ## Authors
 

@@ -27,6 +27,26 @@ The selected aircraft interface uses MADIS `dataSource` codes 0, 1, and 5.
 Both wrappers read these codes from `selected_interface_2019.json` and pass
 them explicitly to the sampler.
 
+## Running the annual evaluation
+
+For example, launch an R+A+S posterior-sampling run with:
+
+```bash
+python reproduction/run_2020_evaluation.py \
+  --configuration R+A+S \
+  --checkpoint /path/to/checkpoint.pt \
+  --hydra-config /path/to/checkpoint_hydra_config.yaml \
+  --era5-root /path/to/era5_1.40625deg \
+  --igra-pkl /path/to/igra_2020.pkl \
+  --aircraft-root /path/to/processed_madis_aircraft_2020 \
+  --surface-root /path/to/processed_madis_metar_2020 \
+  --output-root /path/to/output
+```
+
+Use `--configuration R`, `R+A`, or `R+S` for the matched comparisons. Run
+`python reproduction/run_2020_evaluation.py --help` for the complete command
+interface.
+
 ## Creating the held-out splits
 
 Create separate aircraft and surface roots before running the corresponding
@@ -58,3 +78,11 @@ perform the downstream metric aggregation, bootstrap analysis, or figure and
 table generation reported in the manuscript. The corresponding downstream
 scripts and compact reported summaries are documented in
 [`../analysis/README.md`](../analysis/README.md).
+
+## Implementation provenance
+
+The public research snapshot was prepared from internal source revision
+`5875fe981a77a00a3d1392d24f84b8285cf48a41`, the revision recorded for the
+paper experiments. The internal hash is retained here only to connect the
+cleaned public release to the implementation used for those experiments; cite
+the public release rather than this internal revision.
