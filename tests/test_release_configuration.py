@@ -154,6 +154,8 @@ class ReleaseConfigurationTests(unittest.TestCase):
             citation,
         )
         self.assertNotIn("doi:", citation.lower())
+        self.assertIn("version: 1.0.0", citation)
+        self.assertIn("date-released: 2026-09-15", citation)
 
     def test_internal_release_documents_are_not_packaged(self):
         for name in (
