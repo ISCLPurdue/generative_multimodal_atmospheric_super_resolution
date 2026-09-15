@@ -1,6 +1,6 @@
 # Generative Atmospheric Super-Resolution across Heterogeneous Observing Systems through Composable Interfaces
 
-[Release v1.0.1](https://github.com/ISCLPurdue/generative_multimodal_atmospheric_super_resolution/releases/tag/v1.0.1)
+[Release v1.0.2](https://github.com/ISCLPurdue/generative_multimodal_atmospheric_super_resolution/releases/tag/v1.0.2)
 · [Data and model inputs](DATA.md)
 · [Reproduction](reproduction/README.md)
 · [Reported analyses](analysis/README.md)
@@ -30,6 +30,25 @@ interfaces with 2019 observations and evaluates the selected configuration at
 *Annual 2020 spatial distributions of IGRA radiosonde profiles (R), MADIS ABO
 aircraft reports (A), and MADIS METAR surface-station reports (S). Dashed boxes
 mark the CONUS domain used for A and S.*
+
+## Example reconstructions
+
+The same selected 2020 analysis time illustrates how the R+A+S conditioning
+configuration changes a surface and an upper-air reconstruction relative to
+R-only conditioning. This case is illustrative; the annual comparison across
+all 723 matched analysis times follows in [Main result](#main-result).
+
+![Selected 2 m temperature reconstruction and absolute-error changes](docs/figures/selected_t2m_reconstruction.png)
+
+*Selected 2 m temperature example. The CONUS RMSE decreases from 1.94 to
+1.29 K. In panel (f), blue indicates lower absolute error under R+A+S than
+under R-only conditioning.*
+
+![Selected 500 hPa meridional-wind reconstruction and absolute-error changes](docs/figures/selected_v500_reconstruction.png)
+
+*Selected 500 hPa meridional-wind example at the same analysis time. The CONUS
+RMSE decreases from 3.69 to 2.78 m s⁻¹. In panel (f), blue indicates
+lower absolute error under R+A+S than under R-only conditioning.*
 
 ## Main result
 
@@ -95,7 +114,7 @@ summaries are documented under [`analysis/`](analysis/README.md).
 
 Citation metadata are provided in [`CITATION.cff`](CITATION.cff). For a fixed
 software snapshot, please cite the
-[`v1.0.1` release](https://github.com/ISCLPurdue/generative_multimodal_atmospheric_super_resolution/releases/tag/v1.0.1).
+[`v1.0.2` release](https://github.com/ISCLPurdue/generative_multimodal_atmospheric_super_resolution/releases/tag/v1.0.2).
 The associated manuscript citation will be added after the preprint is posted.
 This repository does not require a Zenodo DOI.
 
