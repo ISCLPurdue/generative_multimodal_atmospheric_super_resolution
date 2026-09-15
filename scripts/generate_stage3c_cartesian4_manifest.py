@@ -18,7 +18,7 @@ from run_independent_year_2019_stage3_protocol import (
 REPO = Path(__file__).resolve().parents[1]
 DEFAULT_OUTPUT = (
     REPO
-    / "configs/independent_year_2019/stage3c_directional_cartesian4_manifest_v1.json"
+    / "configs/independent_year_2019/development_history/stage3c_directional_cartesian4_manifest_v1.json"
 )
 
 GRIDS = {

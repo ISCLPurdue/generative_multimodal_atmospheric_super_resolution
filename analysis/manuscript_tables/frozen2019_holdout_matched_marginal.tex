@@ -1,0 +1,22 @@
+\begin{table}[tbp]
+\centering
+\caption{RMSE changes at 2020 observations excluded from conditioning across
+24 seasonally distributed analysis times. For each source, 80\% of the targets
+are retained for conditioning and the remaining 20\% are used for evaluation.
+Intervals are 95\% paired-analysis-time bootstrap intervals.}
+\label{tab:holdout_matched_marginal}
+\small
+\setlength{\tabcolsep}{5pt}
+\renewcommand{\arraystretch}{1.18}
+\begin{tabularx}{\textwidth}{@{}l>{\raggedright\arraybackslash}Xrrr@{}}
+\toprule
+Evaluated source & Conditioning comparison & Mean change & 95\% interval &
+Lower-RMSE cases \\
+\midrule
+Surface station (S) & Retained 80\% of S added to R+A &
+$-13.50\%$ & $[-14.68,-12.35]\%$ & $24/24$ \\
+Aircraft (A) & Retained 80\% of A added to R+S &
+$-8.06\%$ & $[-10.53,-5.48]\%$ & $22/24$ \\
+\bottomrule
+\end{tabularx}
+\end{table}

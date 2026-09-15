@@ -32,8 +32,23 @@ The public wrappers expect the following local inputs:
 5. The pretrained 13-variable atmospheric diffusion checkpoint and its Hydra
    configuration.
 
-The paper uses aircraft reports from ACARS direct, MDCRS/ARINC, and Canadian
-AMDAR, assigns observations within 25 hPa of the 500 and 850 hPa levels, and
-uses equal-cell residual counting. Surface observations constrain 2 m
+The paper uses individual reports from the MADIS `point/acars` product and
+retains the ACARS direct, MDCRS/ARINC, and Canadian AMDAR reporting systems.
+It assigns observations within 25 hPa of the 500 and 850 hPa levels and uses
+equal-cell residual counting. Surface observations constrain 2 m
 temperature and 10 m horizontal winds within the paper's CONUS domain.
 
+The IGRA preprocessing follows the data layout used by the pretrained prior.
+The sounding record designated by IGRA as the surface level supplies the
+near-surface temperature and horizontal-wind targets; these values are mapped
+directly to the `2m_temperature`, `10m_u_component_of_wind`, and
+`10m_v_component_of_wind` channels without an additional height adjustment.
+Measurements reported at 500 and 850 hPa are assigned to the corresponding
+pressure-level channels, and geopotential height is converted to geopotential
+before standardization.
+
+When preparing the aircraft NPZ root, supply only `point/acars` files and pass
+`--keep-data-sources 0,1,5` to
+`scripts/preprocess_madis_aircraft_13var_npz.py`. The public posterior wrappers
+also enforce these codes at load time, so the selected interface does not
+depend on a prefiltered input directory.

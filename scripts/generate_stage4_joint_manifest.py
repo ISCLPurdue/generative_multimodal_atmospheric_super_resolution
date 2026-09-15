@@ -14,7 +14,7 @@ from run_independent_year_2019_stage3_protocol import DEFAULT_SELECTION, load_se
 
 REPO = Path(__file__).resolve().parents[1]
 DEFAULT_OUTPUT = (
-    REPO / "configs/independent_year_2019/stage4_joint3x3_manifest_v1.json"
+    REPO / "configs/independent_year_2019/development_history/stage4_joint3x3_manifest_v1.json"
 )
 
 AIRCRAFT_CANDIDATES = [

@@ -14,7 +14,7 @@ from independent_year_common import stratified24
 
 ROOT = Path("/depot/rmaulik/data/yangxu")
 REPO = ROOT / "repos/observation_interface_independent_year_2019"
-OUT = REPO / "configs/independent_year_2019/candidate_manifest_2019_v1.json"
+OUT = REPO / "configs/independent_year_2019/development_history/candidate_manifest_2019_v1.json"
 
 SOURCE_POLICIES = {
     "all_qc": [0, 1, 3, 4, 5, 6],

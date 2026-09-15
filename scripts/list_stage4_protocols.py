@@ -11,7 +11,7 @@ from run_independent_year_2019_protocol import sha256
 
 
 REPO = Path(__file__).resolve().parents[1]
-DEFAULT_MANIFEST = REPO / "configs/independent_year_2019/stage4_joint3x3_manifest_v1.json"
+DEFAULT_MANIFEST = REPO / "configs/independent_year_2019/development_history/stage4_joint3x3_manifest_v1.json"
 
 
 def load_manifest(path: Path) -> tuple[dict, str]:

@@ -10,8 +10,6 @@ pandas>=2.2.3
 h5py>=3.13.0
 xarray>=2025.1.2
 dask>=2025.2.0
-pyproj>=3.7.0
-h5netcdf>=1.6.0
 netCDF4>=1.7.2
 
 # Configuration and experiment management

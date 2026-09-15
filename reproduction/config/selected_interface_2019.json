@@ -1,5 +1,5 @@
 {
-  "source_commit": "5875fe981a77a00a3d1392d24f84b8285cf48a41",
+  "internal_source_commit": "5875fe981a77a00a3d1392d24f84b8285cf48a41",
   "development_year": 2019,
   "development_cases": 24,
   "selected_parameters": {
@@ -14,6 +14,8 @@
     "surface_gamma": 0.00004
   },
   "aircraft_interface": {
+    "madis_product_path": "point/acars",
+    "report_representation": "individual reports",
     "reporting_systems": [
       "ACARS direct",
       "MDCRS/ARINC",
@@ -38,4 +40,3 @@
     "longitude_degrees_east": [-125.0, -66.0]
   }
 }
-

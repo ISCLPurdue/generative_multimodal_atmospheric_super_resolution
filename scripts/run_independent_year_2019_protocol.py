@@ -26,7 +26,7 @@ from independent_year_common import six_hour_index  # noqa: E402
 from igra_gen import run_aircraft_13var_persistent as production  # noqa: E402
 
 
-DEFAULT_MANIFEST = REPO / "configs/independent_year_2019/candidate_manifest_2019_v1.json"
+DEFAULT_MANIFEST = REPO / "configs/independent_year_2019/development_history/candidate_manifest_2019_v1.json"
 DEFAULT_IGRA = (
     ROOT
     / "processed/observation_interface_2019/igra_13var_2019_strat24_noaa_v22_rebuild_v1/igra_2019_strat24.pkl"

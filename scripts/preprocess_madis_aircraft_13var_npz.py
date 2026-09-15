@@ -289,8 +289,8 @@ def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("files", nargs="+", type=Path)
     parser.add_argument("--out-root", required=True, type=Path)
-    parser.add_argument("--window-500", type=parse_window, default=DEFAULT_WINDOWS[500], help="Pressure window for 500 hPa, e.g. 495,505")
-    parser.add_argument("--window-850", type=parse_window, default=DEFAULT_WINDOWS[850], help="Pressure window for 850 hPa, e.g. 845,855")
+    parser.add_argument("--window-500", type=parse_window, default=DEFAULT_WINDOWS[500], help="Pressure window for 500 hPa; paper default: 475,525")
+    parser.add_argument("--window-850", type=parse_window, default=DEFAULT_WINDOWS[850], help="Pressure window for 850 hPa; paper default: 825,875")
     parser.add_argument(
         "--exclude-data-sources",
         default="",

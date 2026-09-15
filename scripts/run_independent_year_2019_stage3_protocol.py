@@ -32,7 +32,7 @@ from run_independent_year_2019_protocol import (  # noqa: E402
 
 DEFAULT_SELECTION = (
     REPO
-    / "configs/independent_year_2019/stage3_selection_keep015_v1.json"
+    / "configs/independent_year_2019/development_history/stage3_selection_keep015_v1.json"
 )
 ALLOWED_STAGES = {"aircraft_numerical_calibration", "metar_numerical_calibration"}
 

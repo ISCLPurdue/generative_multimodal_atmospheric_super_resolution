@@ -12,6 +12,7 @@ import argparse
 import csv
 import hashlib
 import json
+import os
 import subprocess
 from datetime import datetime, timezone
 from pathlib import Path
@@ -98,11 +99,11 @@ def main() -> None:
     raw_igra = ROOT / "data/observation_interface_2019/raw/igra_v2_por_parity_v1"
 
     required_control = [
-        REPO / "configs/independent_year_2019/candidate_manifest_2019_v1.json",
-        REPO / "configs/independent_year_2019/candidate_manifest_2019_v1.sha256",
-        REPO / "configs/independent_year_2019/SELECTION_RULE_2019.md",
-        REPO / "configs/independent_year_2019/IGRA_PARITY_GATE.md",
-        REPO / "configs/independent_year_2019/IGRA_PARITY_GATE_V2.md",
+        REPO / "configs/independent_year_2019/development_history/candidate_manifest_2019_v1.json",
+        REPO / "configs/independent_year_2019/development_history/candidate_manifest_2019_v1.sha256",
+        REPO / "configs/independent_year_2019/development_history/SELECTION_RULE_2019.md",
+        REPO / "configs/independent_year_2019/development_history/IGRA_PARITY_GATE.md",
+        REPO / "configs/independent_year_2019/development_history/IGRA_PARITY_GATE_V2.md",
         REPORT / "igra_parity_gate_result.json",
         REPORT / "igra_parity_gate_v2_result.json",
         REPORT / "igra_2020_full_archive_parity_summary.json",
@@ -122,10 +123,10 @@ def main() -> None:
         REPO / "src/igra_gen/run_aircraft_13var_persistent.py",
         REPO / "src/igra_gen/generating/conditioning_methods.py",
     ]
-    checkpoint = (
-        ROOT
-        / "repos/goes_posterior_sampling_13var/src/results/era5_cond_13/20250913_180217/checkpoints/checkpoint-037129.pt"
-    )
+    checkpoint_value = os.environ.get("ATMOSPHERIC_PRIOR_CHECKPOINT", "")
+    if not checkpoint_value:
+        raise RuntimeError("Set ATMOSPHERIC_PRIOR_CHECKPOINT before freezing the bundle")
+    checkpoint = Path(checkpoint_value)
 
     payload = {
         "schema": "observation-interface-independent-year-pre-gpu-freeze-v1",

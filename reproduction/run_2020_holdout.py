@@ -51,18 +51,20 @@ def parse_args() -> argparse.Namespace:
     return parser.parse_args()
 
 
-def register_experiment(holdout: str, production) -> str:
+def register_experiment(
+    holdout: str, production, aircraft_data_sources: list[int]
+) -> str:
     name = f"paper_2020_{holdout}_holdout"
     production.EXPERIMENTS[name] = {
         "use_igra": True,
         "obs_mode": "aircraft_around25",
         "obs_modality": "aircraft_surface",
-        "obs_space": "aircraft_surface_superob_grid",
-        "aircraft_source_filter": "combined",
+        "obs_space": "aircraft_surface_cell_mean_grid",
+        "aircraft_source_filter": "acars",
         "aircraft_spatial_support": "strict_conus",
         "aircraft_grid_aggregation": "equal",
         "aircraft_pressure_window_name": "around25",
-        "aircraft_source_policy_name": "legacy_keep015",
+        "aircraft_data_sources": aircraft_data_sources,
         "surface_variables": production.SURFACE_METAR_VARIABLES,
         "surface_spatial_support": "strict_conus",
         "surface_grid_aggregation": "equal",
@@ -77,8 +79,11 @@ def main() -> None:
 
     config = load_json(args.interface_config)
     selected = config["selected_parameters"]
+    aircraft_data_sources = [
+        int(value) for value in config["aircraft_interface"]["madis_data_source_codes"]
+    ]
     timesteps = [int(value) for value in load_json(args.timesteps)["timesteps"]]
-    experiment = register_experiment(args.holdout, production)
+    experiment = register_experiment(args.holdout, production, aircraft_data_sources)
     output_root = args.output_root / experiment
     output_root.mkdir(parents=True, exist_ok=True)
     resolved = {
@@ -88,7 +93,8 @@ def main() -> None:
         "ensemble": args.ensemble,
         "steps": args.steps,
         "seed": args.seed,
-        "source_commit": config["source_commit"],
+        "internal_source_commit": config["internal_source_commit"],
+        "aircraft_data_sources": aircraft_data_sources,
         "note": (
             "For the selected source, --aircraft-root or --surface-root must "
             "contain the retained 80% conditioning targets. Excluded targets "

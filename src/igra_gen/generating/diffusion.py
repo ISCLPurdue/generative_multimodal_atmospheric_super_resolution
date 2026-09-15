@@ -73,14 +73,25 @@ class DiffusionSampler:
 
 
 class PosteriorDiffusionSampler:
-    def __init__(self, net, conditioning_type="sr", in_shape=(48,96), target_shape=(128,256), scale=1.0):
+    def __init__(
+        self,
+        net,
+        conditioning_type="sr",
+        in_shape=(48, 96),
+        target_shape=(128, 256),
+        scale=1.0,
+        lat_path=None,
+        lon_path=None,
+    ):
         super().__init__()
         self.net = net
         from igra_gen.generating.conditioning_methods import UnifiedOperator
         self.operator = UnifiedOperator(
             conditioning_type=conditioning_type,
             in_shape=in_shape,
-            target_shape=target_shape
+            target_shape=target_shape,
+            lat_path=lat_path,
+            lon_path=lon_path,
         )
         self.cm = ConditioningMethod(self.operator, scale=scale)
         

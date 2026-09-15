@@ -19,22 +19,19 @@ SRC_ROOT = os.path.dirname(WORKDIR)
 sys.path.insert(0, SRC_ROOT)
 sys.path.insert(0, WORKDIR)
 
-import sample_lsf_airtemp_common_native as sample_lsf
 from igra_gen.generating.factory import sampler_factory
 from igra_gen.models.precond import EDMPrecond
 from igra_gen.utils import io
 
 
-ERA5_ROOT = sample_lsf.ERA5_ROOT
-HYDRA_CFG = sample_lsf.HYDRA_CFG
-DEFAULT_CHECKPOINT = sample_lsf.DEFAULT_CHECKPOINT
-GOES_LSF_ROOT = sample_lsf.GOES_LSF_ROOT
-HOURLY_AIRTEMP2KM_ROOT = sample_lsf.HOURLY_AIRTEMP2KM_ROOT
+ERA5_ROOT = os.environ.get("ERA5_ROOT", "")
+HYDRA_CFG = os.environ.get("ATMOSPHERIC_PRIOR_HYDRA_CONFIG", "")
+DEFAULT_CHECKPOINT = os.environ.get("ATMOSPHERIC_PRIOR_CHECKPOINT", "")
 IGRA_PKL = os.environ.get("IGRA_PKL", "")
 NUM_CHANNELS = 13
 AIRCRAFT_AROUND5_ROOT = os.environ.get("AIRCRAFT_AROUND5_ROOT", "")
 AIRCRAFT_AROUND25_ROOT = os.environ.get("AIRCRAFT_AROUND25_ROOT", "")
-SURFACE_METAR_STRAT24_ROOT = os.environ.get("SURFACE_METAR_ROOT", "")
+SURFACE_METAR_ROOT = os.environ.get("SURFACE_METAR_ROOT", "")
 # Legacy aliases retained for old run manifests and earlier diagnostics.
 AIRCRAFT_CLEAN_ROOT = AIRCRAFT_AROUND5_ROOT
 AIRCRAFT_MID_ROOT = AIRCRAFT_AROUND25_ROOT
@@ -69,6 +66,15 @@ SURFACE_METAR_VARIABLES = [
     "10m_u_component_of_wind",
     "10m_v_component_of_wind",
 ]
+
+# Descriptive names used by the public wrappers. The implementation
+# names on the right are retained so historical experiment manifests remain
+# readable without changing their provenance.
+PAPER_OBS_SPACE_ALIASES = {
+    "aircraft_cell_mean_grid": "aircraft_superob_grid",
+    "surface_cell_mean_grid": "surface_superob_grid",
+    "aircraft_surface_cell_mean_grid": "aircraft_surface_superob_grid",
+}
 
 EXPERIMENTS = {
     "igra_only": {
@@ -189,7 +195,7 @@ def _add_stage1_aircraft_experiments() -> None:
             "obs_modality": "aircraft_split",
             "obs_space": "aircraft_superob_grid_split",
             "aircraft_spatial_support": support,
-            "description": f"IGRA all-13 plus source-split MADIS aircraft mid-window V4 AirTemp-like dense masked-grid H, support={support}.",
+            "description": f"IGRA all-13 plus source-split MADIS aircraft mid-window V4 masked-grid H, support={support}.",
         }
 
 
@@ -279,7 +285,7 @@ def _add_surface_metar_stagea_experiments() -> None:
     for variant_name, variant in variants.items():
         EXPERIMENTS[f"metar_strict_conus_t2muv10_{variant_name}"] = {
             "use_igra": True,
-            "obs_mode": "surface_metar_strat24",
+            "obs_mode": "surface_metar",
             "obs_modality": "surface",
             "surface_variables": SURFACE_METAR_VARIABLES,
             "surface_spatial_support": "strict_conus",
@@ -383,7 +389,7 @@ def parse_timesteps(text: str) -> List[int]:
 
 
 def default_timesteps_16() -> List[int]:
-    """The locally available HourlyAirTemp2kmUSA 2020 subset."""
+    """Four representative groups of 2020 six-hourly analysis indices."""
     return (
         list(range(0, 4))
         + list(range(364, 368))
@@ -422,28 +428,20 @@ class PersistentFullPoolRunner:
         S_min: float = 0.01,
         S_max: float = 50.0,
         S_noise: float = 1.003,
-        airtemp_mask_policy: str = "physical",
         igra_pkl: str = IGRA_PKL,
         aircraft_around5_root: str = AIRCRAFT_AROUND5_ROOT,
         aircraft_around25_root: str = AIRCRAFT_AROUND25_ROOT,
         aircraft_clean_root: str = AIRCRAFT_CLEAN_ROOT,
         aircraft_mid_root: str = AIRCRAFT_MID_ROOT,
-        surface_metar_root: str = SURFACE_METAR_STRAT24_ROOT,
+        surface_metar_root: str = SURFACE_METAR_ROOT,
         checkpoint: str = DEFAULT_CHECKPOINT,
         era5_root: str = ERA5_ROOT,
         hydra_cfg: str = HYDRA_CFG,
         num_channels: int = NUM_CHANNELS,
-        raw_goes_max_points: int = 0,
         likelihood_mode: str = "multimodal",
         std_igra: float = 5e-4,
         gamma_igra: float = 2e-6,
         lambda_igra: float = 1.0,
-        std_goes: float = 5e-4,
-        gamma_goes: float = 2e-6,
-        lambda_goes: float = 1.0,
-        std_airtemp: float = 5e-4,
-        gamma_airtemp: float = 2e-6,
-        lambda_airtemp: float = 1.0,
         std_aircraft: float = 5e-4,
         gamma_aircraft: float = 2e-6,
         lambda_aircraft: float = 1.0,
@@ -471,7 +469,6 @@ class PersistentFullPoolRunner:
         self.S_min = S_min
         self.S_max = S_max
         self.S_noise = S_noise
-        self.airtemp_mask_policy = airtemp_mask_policy
         self.igra_pkl = igra_pkl
         self.aircraft_roots = {
             "aircraft_around5": aircraft_around5_root,
@@ -486,7 +483,6 @@ class PersistentFullPoolRunner:
         self.num_channels = num_channels
         self.era5_split = era5_split
         self.calendar_year = int(calendar_year)
-        self.raw_goes_max_points = raw_goes_max_points if raw_goes_max_points > 0 else None
         if likelihood_mode not in {"legacy", "multimodal"}:
             raise ValueError(f"Unknown likelihood_mode={likelihood_mode}")
         self.likelihood_mode = likelihood_mode
@@ -494,12 +490,6 @@ class PersistentFullPoolRunner:
             "std_igra": std_igra,
             "gamma_igra": gamma_igra,
             "lambda_igra": lambda_igra,
-            "std_goes": std_goes,
-            "gamma_goes": gamma_goes,
-            "lambda_goes": lambda_goes,
-            "std_airtemp": std_airtemp,
-            "gamma_airtemp": gamma_airtemp,
-            "lambda_airtemp": lambda_airtemp,
             "std_aircraft": std_aircraft,
             "gamma_aircraft": gamma_aircraft,
             "lambda_aircraft": lambda_aircraft,
@@ -565,6 +555,8 @@ class PersistentFullPoolRunner:
             conditioning_type="multimodal" if self.likelihood_mode == "multimodal" else "igra",
             in_shape=(16, 32),
             target_shape=(128, 256),
+            lat_path=os.path.join(self.era5_root, "lat.npy"),
+            lon_path=os.path.join(self.era5_root, "lon.npy"),
         )
         self.in_shape = (1, self.num_channels, 128, 256)
 
@@ -959,7 +951,7 @@ class PersistentFullPoolRunner:
             cells[var] = int(np.unique(self._nearest_era5_flat_cells(locs)).size) if vals.size else 0
         metadata_json = str(data["metadata_json"]) if "metadata_json" in data.files else "{}"
         meta = {
-            "obs_mode": "surface_metar_strat24",
+            "obs_mode": "surface_metar",
             "surface_metar_root": self.surface_metar_root,
             "surface_metar_file": path,
             "surface_spatial_support": spatial_support,
@@ -1015,188 +1007,11 @@ class PersistentFullPoolRunner:
         })
         return meta, grids, masks, channel_indices, count_stack
 
-    def load_all_airtemp2km_measurements(self, timestep: int) -> Tuple[Dict[str, str], np.ndarray, np.ndarray]:
-        target_dt = self.timestep_to_datetime(timestep)
-        goes_file = sample_lsf._nearest_lsf_file(self.goes_lsf_root, target_dt)
-        airtemp_file, airtemp_k, airtemp_valid = sample_lsf.load_hourly_airtemp2km(
-            root=self.hourly_airtemp2km_root,
-            target_dt=target_dt,
-            mask_policy=self.airtemp_mask_policy,
-        )
-        ds = xr.open_dataset(goes_file, engine="h5netcdf")
-        try:
-            lats, lons = sample_lsf._goes_xy_to_latlon(ds)
-        finally:
-            ds.close()
-        if airtemp_k.shape != lats.shape:
-            raise ValueError(f"AirTemp grid shape {airtemp_k.shape} does not match GOES grid shape {lats.shape}")
-        valid = airtemp_valid & np.isfinite(airtemp_k) & np.isfinite(lats) & np.isfinite(lons)
-        idx = np.where(valid.ravel())[0]
-        if idx.size == 0:
-            raise ValueError(f"No valid all-AirTemp points for t{timestep:04d}")
-        locs = np.stack([lats.ravel()[idx], lons.ravel()[idx]], axis=1).astype(np.float32)
-        vals = ((airtemp_k.ravel()[idx] - self.mean_2m) / self.std_2m).astype(np.float32)
-        meta = {
-            "goes_grid_file": goes_file,
-            "airtemp_file": airtemp_file,
-            "obs_mode": "all_airtemp2km",
-            "kept_points": str(idx.size),
-        }
-        return meta, locs, vals
-
-    def load_raw_goes_common_measurements(self, timestep: int) -> Tuple[Dict[str, str], np.ndarray, np.ndarray]:
-        target_dt = self.timestep_to_datetime(timestep)
-        pool = sample_lsf.load_lsf_valid_pool(
-            goes_lsf_root=self.goes_lsf_root,
-            target_dt=target_dt,
-            era5_mean_2m=self.mean_2m,
-            era5_std_2m=self.std_2m,
-            observation_product="hourly_airtemp2kmusa",
-            hourly_airtemp2km_root=self.hourly_airtemp2km_root,
-            airtemp_mask_policy=self.airtemp_mask_policy,
-        )
-        idx = np.asarray(pool["idx"], dtype=np.int64)
-        lats = pool["lats"]
-        lons = pool["lons"]
-        lst_k = pool["lst_k"]
-        locs = np.stack([lats.ravel()[idx], lons.ravel()[idx]], axis=1).astype(np.float32)
-        vals = ((lst_k.ravel()[idx] - self.mean_2m) / self.std_2m).astype(np.float32)
-        meta = {
-            "lsf_file": pool["lsf_file"],
-            "airtemp_file": pool["observation_file"],
-            "obs_mode": "raw_goes_common",
-            "kept_points": str(idx.size),
-            "common_pool_rule": "GOES LST valid and HourlyAirTemp2kmUSA valid on the same ABI grid index; raw GOES LST values are used.",
-        }
-        return meta, locs, vals
-
-    def aggregate_native_to_era5_grid(
-        self,
-        lats: np.ndarray,
-        lons: np.ndarray,
-        values_k: np.ndarray,
-        valid_idx: np.ndarray,
-    ) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
-        """Aggregate dense native pixels to one normalized value per ERA5 cell."""
-        if valid_idx.size == 0:
-            raise ValueError("Cannot aggregate an empty native-pixel pool")
-        lat_axis = self.era5_lat
-        lon_axis = self.era5_lon
-        dlat = float(np.median(np.diff(lat_axis)))
-        dlon = float(np.median(np.diff(lon_axis)))
-        lat_flat = lats.ravel()[valid_idx].astype(np.float64)
-        lon_flat = np.mod(lons.ravel()[valid_idx].astype(np.float64), 360.0)
-        val_flat = values_k.ravel()[valid_idx].astype(np.float64)
-        good = np.isfinite(lat_flat) & np.isfinite(lon_flat) & np.isfinite(val_flat)
-        lat_flat = lat_flat[good]
-        lon_flat = lon_flat[good]
-        val_flat = val_flat[good]
-        if val_flat.size == 0:
-            raise ValueError("No finite native pixels left after aggregate filtering")
-
-        lat_idx = np.rint((lat_flat - float(lat_axis[0])) / dlat).astype(np.int64)
-        lon_idx = np.rint((lon_flat - float(lon_axis[0])) / dlon).astype(np.int64)
-        lat_idx = np.clip(lat_idx, 0, lat_axis.size - 1)
-        lon_idx = np.mod(lon_idx, lon_axis.size)
-        flat_cell = lat_idx * lon_axis.size + lon_idx
-        n_cells = lat_axis.size * lon_axis.size
-        sum_k = np.bincount(flat_cell, weights=val_flat, minlength=n_cells)
-        count = np.bincount(flat_cell, minlength=n_cells).astype(np.int64)
-        mask = count > 0
-        grid_k = np.full(n_cells, np.nan, dtype=np.float32)
-        grid_k[mask] = (sum_k[mask] / count[mask]).astype(np.float32)
-        grid_norm = np.zeros(n_cells, dtype=np.float32)
-        grid_norm[mask] = ((grid_k[mask] - self.mean_2m) / self.std_2m).astype(np.float32)
-        shape = (lat_axis.size, lon_axis.size)
-        return grid_norm.reshape(shape), mask.reshape(shape), count.reshape(shape)
-
-    def load_grid_common_measurements(self, obs_mode: str, timestep: int) -> Tuple[Dict[str, str], np.ndarray, np.ndarray, np.ndarray]:
-        target_dt = self.timestep_to_datetime(timestep)
-        pool = sample_lsf.load_lsf_valid_pool(
-            goes_lsf_root=self.goes_lsf_root,
-            target_dt=target_dt,
-            era5_mean_2m=self.mean_2m,
-            era5_std_2m=self.std_2m,
-            observation_product="hourly_airtemp2kmusa",
-            hourly_airtemp2km_root=self.hourly_airtemp2km_root,
-            airtemp_mask_policy=self.airtemp_mask_policy,
-        )
-        idx = np.asarray(pool["idx"], dtype=np.int64)
-        if obs_mode == "goes_grid_common":
-            values_k = pool["lst_k"]
-            product = "raw_goes_lst"
-        elif obs_mode == "airtemp_grid_common":
-            values_k = pool["observation_k"]
-            product = "hourly_airtemp2kmusa"
-        else:
-            raise ValueError(f"Unknown gridded obs_mode={obs_mode}")
-        obs_grid, mask_grid, count_grid = self.aggregate_native_to_era5_grid(
-            lats=pool["lats"],
-            lons=pool["lons"],
-            values_k=values_k,
-            valid_idx=idx,
-        )
-        meta = {
-            "lsf_file": pool["lsf_file"],
-            "airtemp_file": pool["observation_file"],
-            "obs_mode": obs_mode,
-            "obs_space": "era5_grid_aggregate",
-            "native_common_points": str(idx.size),
-            "valid_era5_cells": str(int(mask_grid.sum())),
-            "max_native_pixels_per_cell": str(int(count_grid.max())),
-            "observation_product": product,
-            "common_pool_rule": "Native pixels must have both valid GOES LST and valid HourlyAirTemp2kmUSA; values are aggregated to ERA5 grid cells before likelihood.",
-        }
-        return meta, obs_grid, mask_grid, count_grid
-
     def load_observation_measurements(self, obs_mode: str, timestep: int) -> Tuple[Dict[str, str], np.ndarray, np.ndarray]:
-        target_dt = self.timestep_to_datetime(timestep)
         if obs_mode == "none":
             locs = np.empty((0, 2), dtype=np.float32)
             vals = np.empty((0,), dtype=np.float32)
             return {"obs_mode": "none", "kept_points": "0"}, locs, vals
-        if obs_mode in {"raw_goes_lst", "raw_goes_full"}:
-            lsf_file, locs, vals = sample_lsf.load_lsf_measurements(
-                goes_lsf_root=self.goes_lsf_root,
-                target_dt=target_dt,
-                max_points=self.raw_goes_max_points,
-                seed=self.seed + timestep,
-                era5_mean_2m=self.mean_2m,
-                era5_std_2m=self.std_2m,
-                selected_indices_path=None,
-                observation_product="raw_goes_lst",
-                hourly_airtemp2km_root=self.hourly_airtemp2km_root,
-                airtemp_mask_policy=self.airtemp_mask_policy,
-            )
-            return {
-                "lsf_file": lsf_file,
-                "obs_mode": obs_mode,
-                "kept_points": str(len(vals)),
-                "raw_goes_max_points": str(self.raw_goes_max_points or ""),
-            }, locs, vals
-        if obs_mode == "raw_goes_common":
-            return self.load_raw_goes_common_measurements(timestep)
-        if obs_mode == "airtemp_common":
-            lsf_file, locs, vals = sample_lsf.load_lsf_measurements(
-                goes_lsf_root=self.goes_lsf_root,
-                target_dt=target_dt,
-                max_points=None,
-                seed=self.seed + timestep,
-                era5_mean_2m=self.mean_2m,
-                era5_std_2m=self.std_2m,
-                selected_indices_path=None,
-                observation_product="hourly_airtemp2kmusa",
-                hourly_airtemp2km_root=self.hourly_airtemp2km_root,
-                airtemp_mask_policy=self.airtemp_mask_policy,
-            )
-            return {
-                "lsf_file": lsf_file,
-                "obs_mode": "airtemp_common",
-                "kept_points": str(len(vals)),
-                "common_pool_rule": "GOES LST valid and HourlyAirTemp2kmUSA valid on the same ABI grid index; HourlyAirTemp values are used.",
-            }, locs, vals
-        if obs_mode == "all_airtemp2km":
-            return self.load_all_airtemp2km_measurements(timestep)
         raise ValueError(f"Unknown obs_mode={obs_mode}")
 
     def output_path(self, experiment: str, timestep: int) -> str:
@@ -1222,12 +1037,6 @@ class PersistentFullPoolRunner:
             "weights": [ch_weights] * self.ens,
         }
 
-    def temp_only_channels(self, locs: np.ndarray, vals: np.ndarray) -> Tuple[List[np.ndarray], List[np.ndarray]]:
-        ch_locs, ch_vals = empty_channels(len(self.model_vars))
-        ch_locs[self.temp_idx] = np.asarray(locs, dtype=np.float32)
-        ch_vals[self.temp_idx] = np.asarray(vals, dtype=np.float32)
-        return ch_locs, ch_vals
-
     def run_one(self, experiment: str, timestep: int, overwrite: bool = False) -> str:
         if experiment not in EXPERIMENTS:
             raise ValueError(f"Unknown experiment={experiment}. Choices: {sorted(EXPERIMENTS)}")
@@ -1239,19 +1048,18 @@ class PersistentFullPoolRunner:
 
         target_dt = self.timestep_to_datetime(timestep)
         io.log0(f"Running {experiment} t{timestep:04d} target_dt={target_dt.isoformat()}")
-        obs_space = spec.get("obs_space", "points")
-        obs_grid = obs_mask = obs_count = None
+        requested_obs_space = spec.get("obs_space", "points")
+        obs_space = PAPER_OBS_SPACE_ALIASES.get(
+            requested_obs_space, requested_obs_space
+        )
+        obs_mask = obs_count = None
         aircraft_locs = aircraft_vals = aircraft_weights = None
         aircraft_grids = aircraft_masks = aircraft_channel_indices = None
         aircraft_split_sparse = None
         aircraft_split_grid = None
         surface_locs = surface_vals = surface_weights = None
         surface_grids = surface_masks = surface_channel_indices = None
-        if obs_space == "grid":
-            obs_meta, obs_grid, obs_mask, obs_count = self.load_grid_common_measurements(spec["obs_mode"], timestep)
-            obs_locs = np.empty((0, 2), dtype=np.float32)
-            obs_vals = np.empty((0,), dtype=np.float32)
-        elif obs_space == "aircraft_surface_sparse":
+        if obs_space == "aircraft_surface_sparse":
             aircraft_weighting = spec.get("aircraft_weighting", "simple")
             surface_weighting = spec.get("surface_weighting", "simple")
             aircraft_meta, aircraft_locs, aircraft_vals, aircraft_weights = self.load_aircraft_measurements(
@@ -1367,14 +1175,15 @@ class PersistentFullPoolRunner:
         else:
             obs_meta, obs_locs, obs_vals = self.load_observation_measurements(spec["obs_mode"], timestep)
 
+        if requested_obs_space != obs_space:
+            obs_meta["paper_obs_space"] = requested_obs_space
+
         if spec["use_igra"]:
             igra_locs, igra_vals = self.load_igra_channels(timestep, variables=spec.get("igra_variables"))
         else:
             igra_locs, igra_vals = empty_channels(len(self.model_vars))
 
         if self.likelihood_mode == "legacy":
-            if obs_space == "grid":
-                raise ValueError("Grid-space GOES/AirTemp experiments require --likelihood_mode multimodal")
             ch_locs = [np.asarray(x, dtype=np.float32) for x in igra_locs]
             ch_vals = [np.asarray(x, dtype=np.float32) for x in igra_vals]
             ch_locs[self.temp_idx] = np.concatenate([ch_locs[self.temp_idx], obs_locs], axis=0)
@@ -1387,24 +1196,6 @@ class PersistentFullPoolRunner:
                 measurement["igra"] = self.as_ensemble_measurement(igra_locs, igra_vals)
                 ch_locs = [np.asarray(x, dtype=np.float32) for x in igra_locs]
                 ch_vals = [np.asarray(x, dtype=np.float32) for x in igra_vals]
-            if len(obs_vals):
-                obs_ch_locs, obs_ch_vals = self.temp_only_channels(obs_locs, obs_vals)
-                obs_modality = spec["obs_modality"]
-                if obs_modality not in {"goes", "airtemp"}:
-                    raise ValueError(f"Experiment {experiment} has obs points but invalid obs_modality={obs_modality}")
-                measurement[obs_modality] = self.as_ensemble_measurement(obs_ch_locs, obs_ch_vals)
-                ch_locs[self.temp_idx] = np.concatenate([ch_locs[self.temp_idx], obs_locs], axis=0)
-                ch_vals[self.temp_idx] = np.concatenate([ch_vals[self.temp_idx], obs_vals], axis=0)
-            if obs_space == "grid":
-                obs_modality = spec["obs_modality"]
-                if obs_modality not in {"goes", "airtemp"}:
-                    raise ValueError(f"Experiment {experiment} has gridded obs but invalid obs_modality={obs_modality}")
-                measurement[obs_modality] = {
-                    "kind": "grid",
-                    "grid": obs_grid,
-                    "mask": obs_mask,
-                    "channel_idx": self.temp_idx,
-                }
             if obs_space in {"aircraft_weighted_sparse", "aircraft_simple_sparse"}:
                 obs_modality = spec["obs_modality"]
                 if obs_modality != "aircraft":
@@ -1533,7 +1324,7 @@ class PersistentFullPoolRunner:
             grid_valid_cells += int(sum(mask.sum() for mask in surface_masks))
         else:
             grid_valid_cells = int(obs_mask.sum()) if obs_mask is not None else 0
-        grid_native_points = int(obs_meta.get("native_common_points", "0")) if obs_space == "grid" else 0
+        grid_native_points = 0
         if obs_space in {"aircraft_weighted_sparse", "aircraft_simple_sparse", "aircraft_superob_grid"}:
             aircraft_counts = json.loads(obs_meta.get("aircraft_counts_json", "{}"))
             grid_native_points = int(sum(int(v) for v in aircraft_counts.values()))
@@ -1611,7 +1402,7 @@ class PersistentFullPoolRunner:
             channel_names=np.asarray(self.model_vars),
             channel_counts=np.asarray([len(v) for v in ch_vals], dtype=np.int64),
             obs_points=np.asarray(len(obs_vals), dtype=np.int64),
-            obs_space=np.asarray(obs_space),
+            obs_space=np.asarray(requested_obs_space),
             grid_valid_cells=np.asarray(grid_valid_cells, dtype=np.int64),
             grid_native_points=np.asarray(grid_native_points, dtype=np.int64),
             grid_count=np.asarray(obs_count if obs_count is not None else np.zeros((0,), dtype=np.int64), dtype=np.int64),
@@ -1620,7 +1411,6 @@ class PersistentFullPoolRunner:
             wind_grid_masks=np.asarray(aircraft_masks if aircraft_masks is not None else np.zeros((0,), dtype=bool), dtype=bool),
             surface_channel_indices=np.asarray(surface_channel_indices if surface_channel_indices is not None else np.zeros((0,), dtype=np.int64), dtype=np.int64),
             surface_grid_masks=np.asarray(surface_masks if surface_masks is not None else np.zeros((0,), dtype=bool), dtype=bool),
-            airtemp_mask_policy=np.asarray(self.airtemp_mask_policy),
             obs_meta_json=np.asarray(json.dumps(obs_meta, sort_keys=True)),
             likelihood_mode=np.asarray(self.likelihood_mode),
             likelihood_kwargs_json=np.asarray(json.dumps(self.likelihood_kwargs, sort_keys=True)),
@@ -1654,25 +1444,17 @@ def write_run_manifest(output_root: str, args: argparse.Namespace, timesteps: Li
         "calendar_year": args.calendar_year,
         "hydra_cfg": args.hydra_cfg,
         "num_channels": args.num_channels,
-        "raw_goes_max_points": args.raw_goes_max_points,
         "aircraft_around5_root": args.aircraft_around5_root,
         "aircraft_around25_root": args.aircraft_around25_root,
         "surface_metar_root": args.surface_metar_root,
         "igra_pkl": args.igra_pkl,
         "aircraft_clean_root": args.aircraft_clean_root,
         "aircraft_mid_root": args.aircraft_mid_root,
-        "airtemp_mask_policy": args.airtemp_mask_policy,
         "likelihood_mode": args.likelihood_mode,
         "likelihood_params": {
             "std_igra": args.std_igra,
             "gamma_igra": args.gamma_igra,
             "lambda_igra": args.lambda_igra,
-            "std_goes": args.std_goes,
-            "gamma_goes": args.gamma_goes,
-            "lambda_goes": args.lambda_goes,
-            "std_airtemp": args.std_airtemp,
-            "gamma_airtemp": args.gamma_airtemp,
-            "lambda_airtemp": args.lambda_airtemp,
             "std_aircraft": args.std_aircraft,
             "gamma_aircraft": args.gamma_aircraft,
             "lambda_aircraft": args.lambda_aircraft,
@@ -1716,10 +1498,9 @@ def main():
     parser.add_argument("--S_min", type=float, default=0.01)
     parser.add_argument("--S_max", type=float, default=50.0)
     parser.add_argument("--S_noise", type=float, default=1.003)
-    parser.add_argument("--airtemp_mask_policy", choices=["official", "physical"], default="physical")
     parser.add_argument("--aircraft_around5_root", default=AIRCRAFT_AROUND5_ROOT)
     parser.add_argument("--aircraft_around25_root", default=AIRCRAFT_AROUND25_ROOT)
-    parser.add_argument("--surface_metar_root", default=SURFACE_METAR_STRAT24_ROOT)
+    parser.add_argument("--surface_metar_root", default=SURFACE_METAR_ROOT)
     parser.add_argument("--aircraft_clean_root", default=AIRCRAFT_CLEAN_ROOT)
     parser.add_argument("--aircraft_mid_root", default=AIRCRAFT_MID_ROOT)
     parser.add_argument("--igra_pkl", default=IGRA_PKL)
@@ -1729,22 +1510,10 @@ def main():
     parser.add_argument("--calendar_year", type=int, default=2020)
     parser.add_argument("--hydra_cfg", default=HYDRA_CFG)
     parser.add_argument("--num_channels", type=int, default=NUM_CHANNELS)
-    parser.add_argument(
-        "--raw_goes_max_points",
-        type=int,
-        default=0,
-        help="Optional random-without-replacement cap for raw GOES LST observations; 0 keeps all valid points.",
-    )
     parser.add_argument("--likelihood_mode", choices=["legacy", "multimodal"], default="multimodal")
     parser.add_argument("--std_igra", type=float, default=5e-4)
     parser.add_argument("--gamma_igra", type=float, default=2e-6)
     parser.add_argument("--lambda_igra", type=float, default=1.0)
-    parser.add_argument("--std_goes", type=float, default=5e-4)
-    parser.add_argument("--gamma_goes", type=float, default=2e-6)
-    parser.add_argument("--lambda_goes", type=float, default=1.0)
-    parser.add_argument("--std_airtemp", type=float, default=5e-4)
-    parser.add_argument("--gamma_airtemp", type=float, default=2e-6)
-    parser.add_argument("--lambda_airtemp", type=float, default=1.0)
     parser.add_argument("--std_aircraft", type=float, default=5e-4)
     parser.add_argument("--gamma_aircraft", type=float, default=2e-6)
     parser.add_argument("--lambda_aircraft", type=float, default=1.0)
@@ -1786,7 +1555,6 @@ def main():
         S_min=args.S_min,
         S_max=args.S_max,
         S_noise=args.S_noise,
-        airtemp_mask_policy=args.airtemp_mask_policy,
         igra_pkl=args.igra_pkl,
         aircraft_around5_root=args.aircraft_around5_root,
         aircraft_around25_root=args.aircraft_around25_root,
@@ -1797,17 +1565,10 @@ def main():
         era5_root=args.era5_root,
         hydra_cfg=args.hydra_cfg,
         num_channels=args.num_channels,
-        raw_goes_max_points=args.raw_goes_max_points,
         likelihood_mode=args.likelihood_mode,
         std_igra=args.std_igra,
         gamma_igra=args.gamma_igra,
         lambda_igra=args.lambda_igra,
-        std_goes=args.std_goes,
-        gamma_goes=args.gamma_goes,
-        lambda_goes=args.lambda_goes,
-        std_airtemp=args.std_airtemp,
-        gamma_airtemp=args.gamma_airtemp,
-        lambda_airtemp=args.lambda_airtemp,
         std_aircraft=args.std_aircraft,
         gamma_aircraft=args.gamma_aircraft,
         lambda_aircraft=args.lambda_aircraft,

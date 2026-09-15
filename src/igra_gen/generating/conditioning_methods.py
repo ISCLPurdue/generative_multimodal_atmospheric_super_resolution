@@ -29,15 +29,11 @@ class ConditioningMethod:
 
     def conditioning(self, x_prev, x_t, x_0_hat, measurement, sigma,
                      std_sr=1e-1, gamma_sr=5e-3, std_igra=5e-4, gamma_igra=2e-6,
-                     std_goes=5e-4, gamma_goes=2e-6,
-                     std_airtemp=5e-4, gamma_airtemp=2e-6,
-                     std_goes_wind=5e-4, gamma_goes_wind=2e-6,
                      std_aircraft=5e-4, gamma_aircraft=2e-6,
                      std_surface=5e-4, gamma_surface=2e-6,
                      std_aircraft_acars=None, gamma_aircraft_acars=None,
                      std_aircraft_profiles=None, gamma_aircraft_profiles=None,
-                     lambda_igra=1.0, lambda_goes=1.0, lambda_airtemp=1.0,
-                     lambda_goes_wind=1.0, lambda_aircraft=1.0,
+                     lambda_igra=1.0, lambda_aircraft=1.0,
                      lambda_surface=1.0,
                      lambda_aircraft_acars=None, lambda_aircraft_profiles=None,
                      mu=1, beta=1, lda=0.25, retain_graph=False, **kwargs):
@@ -64,11 +60,11 @@ class ConditioningMethod:
                 measurement[0] = measurement[0].to(device)
             # IGRA part stays as lists (converted to tensors internally in error_function)
 
-        # Modality-specific sparse observations:
+        # Source-specific observations:
         # {
         #   "igra": [query_locations, true_values],
-        #   "goes": [query_locations, true_values],
-        #   "airtemp": [query_locations, true_values],
+        #   "aircraft": {"kind": "multi_grid", ...},
+        #   "surface": {"kind": "multi_grid", ...},
         # }
         # Each modality gets its own variance and lambda weight.  Empty
         # channels are skipped in sparse_error_function, so dense products do
@@ -82,9 +78,6 @@ class ConditioningMethod:
             lambda_aircraft_profiles = lambda_aircraft if lambda_aircraft_profiles is None else lambda_aircraft_profiles
             specs = {
                 "igra": (std_igra, gamma_igra, lambda_igra),
-                "goes": (std_goes, gamma_goes, lambda_goes),
-                "airtemp": (std_airtemp, gamma_airtemp, lambda_airtemp),
-                "goes_wind": (std_goes_wind, gamma_goes_wind, lambda_goes_wind),
                 "aircraft": (std_aircraft, gamma_aircraft, lambda_aircraft),
                 "surface": (std_surface, gamma_surface, lambda_surface),
                 "metar": (std_surface, gamma_surface, lambda_surface),
@@ -144,9 +137,6 @@ class ConditioningMethod:
                         "score_abs_max": float(scaled_score.abs().max().item()),
                         "scale": float(self.scale),
                         "lambda_igra": float(lambda_igra),
-                        "lambda_goes": float(lambda_goes),
-                        "lambda_airtemp": float(lambda_airtemp),
-                        "lambda_goes_wind": float(lambda_goes_wind),
                         "lambda_aircraft": float(lambda_aircraft),
                         "lambda_surface": float(lambda_surface),
                     })
@@ -154,31 +144,7 @@ class ConditioningMethod:
 
         # Detect conditioning type based on measurement structure
         if isinstance(measurement, list):
-            if len(measurement) == 3:
-                # GOES: [locations, values, target_indices]
-                # locations: (N, 2), values: (N, 2), target_indices: (u_idx, v_idx)
-                # Ensure tensors are on correct device
-                locations, values, target_indices = measurement
-                if torch.is_tensor(locations): locations = locations.to(device)
-                if torch.is_tensor(values): values = values.to(device)
-                
-                # We need a list of tensors for the operator interface (batch processing)
-                # Assuming batch size 1 for simplicity here as sample_goes.py does manual loop
-                # If batch size > 1, the input should already be a list of tensors.
-                # Here we wrap single tensors in a list to match the batch-loop in error_function
-                if not isinstance(locations, list) and locations.ndim == 2:
-                    locations = [locations]
-                    values = [values]
-                    
-                err_goes = self.operator.goes_error_function(x_0_hat, locations, values, target_indices)
-                var = std_igra**2 + gamma_igra * (sigma/mu)**2 # Reusing IGRA variance params
-                log_p = -(err_goes/var).sum()/2
-                grad = torch.autograd.grad(outputs=log_p, inputs=x_prev, retain_graph=retain_graph)[0]
-                grad_clipped = grad.clamp(min=-1.0, max=1.0)
-                scaled_score = grad_clipped * self.scale * sigma
-                return scaled_score, err_goes.mean().item()
-                
-            elif len(measurement) == 2:
+            if len(measurement) == 2:
                 if torch.is_tensor(measurement[0]) and (isinstance(measurement[1], (list, tuple)) or hasattr(measurement[1], '__len__')):
                     # SR+IGRA: [low_res_tensor, [query_locations, true_values]]
                     lr, igra_data = measurement
@@ -302,7 +268,6 @@ class IGRAOperator:
                     true_vals = torch.zeros(1, device=x.device, dtype=torch.float32)
                 # Compute interpolated values using function H
                 interpolated_vals = self.H(x, queries)
-                #TODO: some channels have unexpected large differences from IGRA
                 error += torch.mean((interpolated_vals - true_vals)**2)
                 counter += 1
         return error / counter
@@ -336,7 +301,7 @@ class IGRAOperator:
         """
         Sparse point-observation MSE with per-point weights.
 
-        This is intended for clustered dense-ish products such as GOES DMW.
+        This supports clustered point observations such as aircraft reports.
         Empty channels are skipped, and each active channel contributes
         sum(w * residual^2) / sum(w), so clusters can be balanced by assigning
         w_i = 1 / n_points_in_same_ERA5_cell.
@@ -367,12 +332,10 @@ class IGRAOperator:
 
     def gridded_error_function(self, data, obs_grid, mask_grid, channel_idx=0, **kwargs):
         """
-        Masked grid-cell MSE for dense products that have already been
+        Masked grid-cell MSE for observations that have already been
         aggregated onto the ERA5/posterior 128 x 256 grid.
 
-        This avoids treating hundreds of thousands of native GOES/AirTemp
-        pixels as independent point observations.  Each valid ERA5 grid cell
-        contributes at most one residual.
+        Each valid ERA5 grid cell contributes at most one residual.
         """
         obs = torch.as_tensor(obs_grid, device=data.device, dtype=torch.float32)
         mask = torch.as_tensor(mask_grid, device=data.device, dtype=torch.bool)
@@ -394,9 +357,8 @@ class IGRAOperator:
         """
         Multi-channel masked grid-cell MSE.
 
-        Used for GOES wind superobs: each wind component has its own ERA5-grid
-        observation and mask, and active channels are averaged without empty
-        channel dilution.
+        Each observed variable has its own ERA5-grid observation and mask;
+        active channels are averaged without empty-channel dilution.
         """
         error = torch.zeros((), device=data.device, dtype=torch.float32)
         counter = 0
@@ -440,129 +402,53 @@ class IGRAOperator:
         return interpolated_values.squeeze(0).squeeze(0).squeeze(-1)
 
 
-class GOESOperator:
-    def __init__(self, lat=None, lon=None, mode="bilinear"):
-        super().__init__()
-        # GOES operator uses the same interpolation logic as IGRA
-        # If lat/lon are not provided, we assume the caller handles paths or defaults
-        self.mode = mode
-
-    def error_function(self, data, query_locations, true_values, target_indices, **kwargs):
-        """
-        Computes the mean error between interpolated and true values for GOES wind data.
-        
-        Parameters:
-        - data: torch tensor of shape (B, C, L, W), representing batch image values.
-          C=69 for ERA5. We need to select the correct U and V channels.
-        - true_values: list of torch tensors (length B), each shape (N_points, 2). 
-          The last dim 2 is [u_true, v_true].
-        - query_locations: list of torch tensors (length B), each shape (N_points, 2). 
-          The last dim 2 is [lat, lon].
-        - target_indices: list or tuple of (u_channel_idx, v_channel_idx) corresponding to the pressure level.
-          Example: for 500hPa, indices for 'u_component_of_wind_500' and 'v_component_of_wind_500'.
-        
-        Returns:
-        - mean_error: torch scalar tensor
-        """
-        batch_size = len(data)
-        error = 0.
-        counter = 0.
-        
-        u_idx, v_idx = target_indices
-
-        for b in range(batch_size):
-            # Get U and V fields from the model prediction
-            # shape (H, W)
-            u_field = data[b, u_idx]
-            v_field = data[b, v_idx]
-            
-            # Get queries and ground truth for this batch item
-            # queries: (N, 2) [lat, lon]
-            # truths: (N, 2) [u_true, v_true]
-            queries = query_locations[b]
-            truths = true_values[b]
-            
-            if queries.numel() == 0:
-                continue
-                
-            # Ensure tensors are on correct device
-            queries = queries.to(u_field.device).float()
-            truths = truths.to(u_field.device).float()
-            
-            # Interpolate U and V at query locations
-            # self.H returns shape (N,)
-            u_interp = self.H(u_field, queries)
-            v_interp = self.H(v_field, queries)
-            
-            # Compute MSE for U and V components separately and sum
-            mse_u = torch.mean((u_interp - truths[:, 0])**2)
-            mse_v = torch.mean((v_interp - truths[:, 1])**2)
-            
-            error += (mse_u + mse_v)
-            counter += 1
-
-        if counter == 0:
-            return torch.tensor(0., device=data.device, requires_grad=True)
-            
-        return error / counter
-
-    def H(self, x, query_points):
-        """
-        Interpolates values from an image given latitude and longitude coordinates.
-        Uses the same logic as IGRAOperator.H
-        """
-        x = torch.roll(x, shifts=128, dims=1)
-        
-        if query_points.shape[0] == 0:
-            return torch.tensor(0.).to(x.device)
-            
-        # Normalize lat/lon to range [-1, 1] for grid_sample
-        # Assuming global coverage: lat [-90, 90], lon [0, 360]
-        lat_min, lat_max = -90, 90
-        lon_min, lon_max = 0, 360
-        
-        norm_lat = 2 * (query_points[:, 0] - lat_min) / (lat_max - lat_min) - 1
-        # Shift lon by +180 (converting -180/180 or similar to 0/360 frame if needed)
-        # Note: The original IGRA code adds 180. We stick to that convention.
-        norm_lon = 2 * (query_points[:, 1] + 180 - lon_min) / (lon_max - lon_min) - 1
-        
-        # Create grid for interpolation with shape (1, N, 1, 2)
-        grid = torch.stack((norm_lon, norm_lat), dim=-1).to(dtype=torch.float32).view(1, -1, 1, 2)
-        
-        x = x.unsqueeze(0).unsqueeze(0)
-        interpolated_values = F.grid_sample(x.float(), grid, mode=self.mode, align_corners=True, padding_mode='reflection')
-
-        # Reshape output from (1, 1, N, 1) to (N,)
-        return interpolated_values.squeeze(0).squeeze(0).squeeze(-1)
-
-
 class UnifiedOperator:
     """Unified operator that can handle SR, IGRA, and SR+IGRA conditioning"""
     def __init__(self, conditioning_type="sr", in_shape=(48,96), target_shape=(128, 256), mode="bilinear",
-                 lat_path=_ERA5_LAT_PATH,
-                 lon_path=_ERA5_LON_PATH):
+                 lat_path=None,
+                 lon_path=None):
         self.conditioning_type = conditioning_type
         if conditioning_type in ["sr", "sr_igra"]:
             self.sr_op = SuperResolutionOperator(in_shape=in_shape, target_shape=target_shape, mode=mode)
         if conditioning_type in ["igra", "sr_igra", "multimodal"]:
-            try:
-                self.igra_op = IGRAOperator(lat_path=lat_path, lon_path=lon_path, mode=mode)
-            except FileNotFoundError:
-                print(f"Warning: Could not load lat/lon files from {lat_path}, {lon_path}")
-                # Try the configured local ERA5 grid path as a fallback.
-                alt_lat_path = _ERA5_LAT_PATH
-                alt_lon_path = _ERA5_LON_PATH
+            # Explicit grid paths are part of the run configuration.  If the
+            # caller supplies either path, fail on that pair instead of
+            # silently switching to a process-level environment setting.
+            if lat_path is not None or lon_path is not None:
+                self.igra_op = IGRAOperator(
+                    lat_path=lat_path, lon_path=lon_path, mode=mode
+                )
+            else:
                 try:
-                    self.igra_op = IGRAOperator(lat_path=alt_lat_path, lon_path=alt_lon_path, mode=mode)
-                    print(f"Loaded lat/lon from alternative paths: {alt_lat_path}, {alt_lon_path}")
-                except FileNotFoundError:
-                    raise FileNotFoundError(
-                        f"Could not load IGRA lat/lon grid from {lat_path}, {lon_path} "
-                        f"or fallback {alt_lat_path}, {alt_lon_path}. "
-                        "Set IGRA_ERA5_GRID_ROOT or pass lat_path/lon_path."
+                    self.igra_op = IGRAOperator(
+                        lat_path=lat_path, lon_path=lon_path, mode=mode
                     )
-        if conditioning_type in ["goes", "sr_goes"]:
-            self.goes_op = GOESOperator(mode=mode)
+                except FileNotFoundError:
+                    print(
+                        "Warning: Could not load lat/lon files from "
+                        f"{lat_path}, {lon_path}"
+                    )
+                    # Retain the environment-based fallback for historical
+                    # callers that do not use the public reproduction wrappers.
+                    alt_lat_path = _ERA5_LAT_PATH
+                    alt_lon_path = _ERA5_LON_PATH
+                    try:
+                        self.igra_op = IGRAOperator(
+                            lat_path=alt_lat_path,
+                            lon_path=alt_lon_path,
+                            mode=mode,
+                        )
+                        print(
+                            "Loaded lat/lon from alternative paths: "
+                            f"{alt_lat_path}, {alt_lon_path}"
+                        )
+                    except FileNotFoundError:
+                        raise FileNotFoundError(
+                            "Could not load IGRA lat/lon grid from "
+                            f"{lat_path}, {lon_path} or fallback "
+                            f"{alt_lat_path}, {alt_lon_path}. "
+                            "Set IGRA_ERA5_GRID_ROOT or pass lat_path/lon_path."
+                        )
 
     def forward(self, data):
         """SR forward operation"""
@@ -586,7 +472,7 @@ class UnifiedOperator:
             raise ValueError(f"Sparse point operation not supported for conditioning_type: {self.conditioning_type}")
 
     def gridded_error_function(self, data, obs_grid, mask_grid, channel_idx=0):
-        """Masked grid-cell error for dense GOES/AirTemp products on the ERA5 grid."""
+        """Masked grid-cell error for observations on the ERA5 grid."""
         if hasattr(self, 'igra_op'):
             return self.igra_op.gridded_error_function(data, obs_grid, mask_grid, channel_idx=channel_idx)
         else:
@@ -605,13 +491,3 @@ class UnifiedOperator:
             return self.igra_op.multi_gridded_error_function(data, obs_grids, mask_grids, channel_indices)
         else:
             raise ValueError(f"Multi-grid operation not supported for conditioning_type: {self.conditioning_type}")
-
-    def goes_error_function(self, data, query_locations, true_values, target_indices):
-        """GOES error function"""
-        if hasattr(self, 'goes_op'):
-            return self.goes_op.error_function(data, query_locations, true_values, target_indices)
-        else:
-            raise ValueError(f"GOES operation not supported for conditioning_type: {self.conditioning_type}")
-
-
-        

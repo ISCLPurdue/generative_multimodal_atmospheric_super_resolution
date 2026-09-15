@@ -28,7 +28,9 @@ def require_path(value: Path | None, flag: str, configuration: str) -> Path:
     return value
 
 
-def register_experiment(configuration: str, production) -> str:
+def register_experiment(
+    configuration: str, production, aircraft_data_sources: list[int]
+) -> str:
     name = "paper_2020_" + configuration.replace("+", "plus")
     if configuration == "R":
         spec = {
@@ -42,20 +44,20 @@ def register_experiment(configuration: str, production) -> str:
             "use_igra": True,
             "obs_mode": "aircraft_around25",
             "obs_modality": "aircraft",
-            "obs_space": "aircraft_superob_grid",
-            "aircraft_source_filter": "combined",
+            "obs_space": "aircraft_cell_mean_grid",
+            "aircraft_source_filter": "acars",
             "aircraft_spatial_support": "strict_conus",
             "aircraft_grid_aggregation": "equal",
             "aircraft_pressure_window_name": "around25",
-            "aircraft_source_policy_name": "legacy_keep015",
+            "aircraft_data_sources": aircraft_data_sources,
             "description": "Paper R+A configuration.",
         }
     elif configuration == "R+S":
         spec = {
             "use_igra": True,
-            "obs_mode": "surface_metar_strat24",
+            "obs_mode": "surface_metar",
             "obs_modality": "surface",
-            "obs_space": "surface_superob_grid",
+            "obs_space": "surface_cell_mean_grid",
             "surface_variables": production.SURFACE_METAR_VARIABLES,
             "surface_spatial_support": "strict_conus",
             "surface_grid_aggregation": "equal",
@@ -66,12 +68,12 @@ def register_experiment(configuration: str, production) -> str:
             "use_igra": True,
             "obs_mode": "aircraft_around25",
             "obs_modality": "aircraft_surface",
-            "obs_space": "aircraft_surface_superob_grid",
-            "aircraft_source_filter": "combined",
+            "obs_space": "aircraft_surface_cell_mean_grid",
+            "aircraft_source_filter": "acars",
             "aircraft_spatial_support": "strict_conus",
             "aircraft_grid_aggregation": "equal",
             "aircraft_pressure_window_name": "around25",
-            "aircraft_source_policy_name": "legacy_keep015",
+            "aircraft_data_sources": aircraft_data_sources,
             "surface_variables": production.SURFACE_METAR_VARIABLES,
             "surface_spatial_support": "strict_conus",
             "surface_grid_aggregation": "equal",
@@ -112,7 +114,11 @@ def main() -> None:
     if "S" in args.configuration:
         require_path(args.surface_root, "--surface-root", args.configuration)
 
-    selected = load_json(args.interface_config)["selected_parameters"]
+    config = load_json(args.interface_config)
+    selected = config["selected_parameters"]
+    aircraft_data_sources = [
+        int(value) for value in config["aircraft_interface"]["madis_data_source_codes"]
+    ]
     manifest = load_json(args.timesteps)
     timesteps = [int(value) for value in manifest["timesteps"]]
     ensemble = args.ensemble
@@ -122,7 +128,9 @@ def main() -> None:
         ensemble = 1
         steps = min(5, steps)
 
-    experiment = register_experiment(args.configuration, production)
+    experiment = register_experiment(
+        args.configuration, production, aircraft_data_sources
+    )
     output_root = args.output_root / experiment
     output_root.mkdir(parents=True, exist_ok=True)
     resolved = {
@@ -134,7 +142,8 @@ def main() -> None:
         "steps": steps,
         "seed": args.seed,
         "interface_config": str(args.interface_config.resolve()),
-        "source_commit": load_json(args.interface_config)["source_commit"],
+        "internal_source_commit": config["internal_source_commit"],
+        "aircraft_data_sources": aircraft_data_sources,
     }
     (output_root / "resolved_run.json").write_text(
         json.dumps(resolved, indent=2) + "\n", encoding="utf-8"

@@ -1,4 +1,4 @@
-# Generative Atmospheric Super-Resolution with Heterogeneous Observations
+# Generative Atmospheric Super-Resolution across Heterogeneous Observing Systems through Composable Interfaces
 
 Research code supporting the manuscript **Generative Atmospheric
 Super-Resolution across Heterogeneous Observing Systems through Composable
@@ -19,15 +19,19 @@ interfaces with 2019 observations and evaluates the selected configuration at
 
 ## Repository status
 
-This is a public research snapshot prepared from source commit
-`5875fe981a77a00a3d1392d24f84b8285cf48a41`, the code revision recorded for
-the paper experiments. The public wrappers in `reproduction/` expose data and
-checkpoint locations as command-line arguments; no Purdue filesystem layout
-is required by those wrappers.
+This public research snapshot was prepared from internal source revision
+`5875fe981a77a00a3d1392d24f84b8285cf48a41`, the revision recorded for the
+paper experiments. That internal hash is retained only as provenance and is
+not part of the cleaned public Git history; cite the public release rather
+than the internal revision. The wrappers in `reproduction/` expose data and
+checkpoint locations as command-line arguments, so they do not require the
+original Purdue filesystem layout.
 
 The repository does **not** include ERA5 fields, NOAA observations, processed
 observation products, trained model weights, or generated posterior samples.
 See [DATA.md](DATA.md) for the expected inputs and their public providers.
+The compact numerical summaries and scripts supporting the reported analyses
+are collected under [`analysis/`](analysis/README.md).
 
 ## Main entry points
 
@@ -40,9 +44,11 @@ See [DATA.md](DATA.md) for the expected inputs and their public providers.
 - `scripts/run_independent_year_2019_*.py`: 2019 interface development and
   likelihood-parameter selection
 - `reproduction/run_2020_evaluation.py`: R-only, R+A, R+S, and R+A+S annual
-  evaluation wrapper
+  posterior-sampling wrapper
 - `reproduction/run_2020_holdout.py`: aircraft and surface-station held-out
-  evaluation wrapper
+  conditioning posterior-sampling wrapper
+- `reproduction/create_2020_holdout_split.py`: deterministic construction of
+  the retained 80% and excluded 20% targets used by the held-out evaluation
 
 ## Environment
 
@@ -62,7 +68,7 @@ distributed in this repository. The Hydra configuration supplied with that
 checkpoint and the ERA5 normalization files must be provided to the public
 evaluation wrappers.
 
-## Reproducing the 2020 conditioning comparisons
+## Reproducing the 2020 posterior samples
 
 The selected observation-interface settings are recorded in
 `reproduction/config/selected_interface_2019.json`, and the 723 evaluation
@@ -85,17 +91,34 @@ python reproduction/run_2020_evaluation.py \
 Use `--configuration R`, `R+A`, or `R+S` for the matched comparisons. Run
 `python reproduction/run_2020_evaluation.py --help` for the complete interface.
 
+These wrappers reproduce the posterior-sampling stage. They do not by
+themselves compute RMSE, CRPS, ensemble spread and coverage, moving-block
+bootstrap intervals, or manuscript figures and tables. The held-out wrapper
+likewise consumes observation roots produced by
+`reproduction/create_2020_holdout_split.py`, in which the retained 80% of
+targets are stored under `obs/`; the excluded 20% are stored under
+`heldout_obs/` for separate analysis.
+
 ## Scope and provenance
 
 This snapshot preserves the research implementation used for the paper. The
 paper workflow is identified explicitly above and in
-`reproduction/README.md`. Historical development manifests may contain the
-original Purdue filesystem paths as provenance strings. They do not contain
-the referenced data.
+`reproduction/README.md`. Historical development records under
+`configs/independent_year_2019/development_history/` may contain the original
+Purdue filesystem paths and internal identifiers such as
+`legacy_keep015`, `superob`, or `strat24` as provenance strings. These are
+development records, not names for the final public interfaces, and they do
+not contain the referenced data.
 
 Third-party code embedded in individual source files retains its original
 copyright and license notices. No project-wide license has yet been assigned;
 all rights not covered by those notices are reserved by the authors.
+
+## Citation
+
+Citation metadata are provided in [`CITATION.cff`](CITATION.cff). After the
+first versioned GitHub Release is created, cite that fixed release rather than
+the moving default branch. This repository does not require a Zenodo DOI.
 
 ## Acknowledgments
 

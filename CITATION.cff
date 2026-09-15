@@ -1,0 +1,16 @@
+cff-version: 1.2.0
+message: "Please cite this software release and the associated manuscript."
+title: "Generative Atmospheric Super-Resolution across Heterogeneous Observing Systems through Composable Interfaces"
+type: software
+authors:
+  - family-names: Xu
+    given-names: Yang
+  - family-names: Chakraborty
+    given-names: Dibyajyoti
+  - family-names: Guan
+    given-names: Haiwen
+  - family-names: Wang
+    given-names: Sen
+  - family-names: Maulik
+    given-names: Romit
+repository-code: "https://github.com/ISCLPurdue/generative_multimodal_atmospheric_super_resolution"

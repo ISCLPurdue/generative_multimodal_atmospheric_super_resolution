@@ -1,0 +1,59 @@
+\begin{table}[t]
+\centering
+\caption{Observation-interface designs and likelihood parameters selected
+using the 24 development cases from 2019 and held fixed throughout the 2020
+evaluation.}
+\label{tab:final_protocols}
+\footnotesize
+\setlength{\tabcolsep}{2.5pt}
+\renewcommand{\arraystretch}{1.35}
+\begin{tabular}{@{}
+  >{\raggedright\arraybackslash}p{0.115\textwidth}
+  >{\raggedright\arraybackslash}p{0.350\textwidth}
+  >{\raggedright\arraybackslash}p{0.140\textwidth}
+  >{\raggedright\arraybackslash}p{0.160\textwidth}
+  >{\raggedright\arraybackslash}p{0.190\textwidth}@{}}
+\toprule
+Source & Retained observations &
+Constrained variables &
+State mapping and residual counting &
+Likelihood parameters \\
+\midrule
+
+Radiosonde\newline (R) &
+IGRA profiles &
+$t2m$, $u10$, $v10$,\newline
+$t500$, $u500$, $v500$,\newline
+$z500$, $q500$,\newline
+$t850$, $u850$, $v850$,\newline
+$z850$, $q850$ &
+bilinear interpolation; equal target and channel weights &
+$\lambda_{\mathrm R}=1.0$\newline
+$\mathrm{std}_{\mathrm R}=5\times10^{-4}$\newline
+$\gamma_{\mathrm R}=2\times10^{-6}$ \\
+
+\specialrule{0.3pt}{2.5pt}{2.5pt}
+
+Aircraft\newline (A) &
+MADIS ABO reports from ACARS direct, MDCRS/ARINC, and Canadian AMDAR;
+${\pm}25$-hPa windows &
+$t500$, $u500$, $v500$,\newline
+$t850$, $u850$, $v850$ &
+cell means; equal cell and channel weights &
+$\lambda_{\mathrm A}=0.4$\newline
+$\mathrm{std}_{\mathrm A}=5\times10^{-4}$\newline
+$\gamma_{\mathrm A}=2\times10^{-5}$ \\
+
+\specialrule{0.3pt}{2.5pt}{2.5pt}
+
+Surface station\newline (S) &
+MADIS METAR reports &
+$t2m$, $u10$, $v10$ &
+cell means; equal cell and channel weights &
+$\lambda_{\mathrm S}=0.4$\newline
+$\mathrm{std}_{\mathrm S}=1.25\times10^{-4}$\newline
+$\gamma_{\mathrm S}=4\times10^{-5}$ \\
+
+\bottomrule
+\end{tabular}
+\end{table}

@@ -6,7 +6,16 @@ from igra_gen.generating.diffusion import DiffusionSampler,PosteriorDiffusionSam
 from igra_gen.generating.solver import ODESolver
 
 
-def sampler_factory(mode: str, net: torch.nn.Module, conditioning_type="sr", in_shape=(48,96), target_shape=(128,256), scale=1.0) -> Callable[..., torch.Tensor]:
+def sampler_factory(
+    mode: str,
+    net: torch.nn.Module,
+    conditioning_type="sr",
+    in_shape=(48, 96),
+    target_shape=(128, 256),
+    scale=1.0,
+    lat_path=None,
+    lon_path=None,
+) -> Callable[..., torch.Tensor]:
     """Factory to return a sampler function based on the mode.
 
     Args:
@@ -20,7 +29,7 @@ def sampler_factory(mode: str, net: torch.nn.Module, conditioning_type="sr", in_
 
     usage: sampler = sampler_factory("edm_pos_sample", net, conditioning_type="sr")
     """
-    # TODO: currently using sampler defaults.
+    # Parameters not supplied by the caller use the sampler defaults.
     if mode == "edm":
         O = DiffusionSampler(net)
 
@@ -49,7 +58,15 @@ def sampler_factory(mode: str, net: torch.nn.Module, conditioning_type="sr", in_
         return cfm_sampler
     
     elif mode == "edm_pos_sample":
-        O = PosteriorDiffusionSampler(net, conditioning_type=conditioning_type, in_shape=in_shape, target_shape=target_shape, scale=scale)
+        O = PosteriorDiffusionSampler(
+            net,
+            conditioning_type=conditioning_type,
+            in_shape=in_shape,
+            target_shape=target_shape,
+            scale=scale,
+            lat_path=lat_path,
+            lon_path=lon_path,
+        )
 
         def pos_sampler(
             X, generator, condition=None, device=None, in_shape = None, *args, **kwargs

@@ -16,11 +16,11 @@ from list_stage3c_protocols import load_manifest as load_stage3c_manifest
 REPO = Path(__file__).resolve().parents[1]
 DEFAULT_STAGE3C = (
     REPO
-    / "configs/independent_year_2019/stage3c_directional_cartesian4_manifest_v1.json"
+    / "configs/independent_year_2019/development_history/stage3c_directional_cartesian4_manifest_v1.json"
 )
 DEFAULT_OUTPUT = (
     REPO
-    / "configs/independent_year_2019/stage3d_directional_boundary_manifest_v1.json"
+    / "configs/independent_year_2019/development_history/stage3d_directional_boundary_manifest_v1.json"
 )
 
 GRIDS = {

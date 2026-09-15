@@ -110,7 +110,7 @@ def build_one(path: Path, output_root: Path, time_window_min: float) -> dict:
         & (np.abs(offset_min) <= time_window_min)
         & strict_conus_mask(lat, lon)
     )
-    temperature_mask = base & (temperature_qcr == 0) & np.isfinite(temperature) & (temperature >= 180.0) & (temperature <= 330.0)
+    temperature_mask = base & (temperature_qcr == 0) & np.isfinite(temperature) & (temperature > 180.0) & (temperature < 330.0)
     wind_mask = (
         base
         & (direction_qcr == 0)
@@ -118,7 +118,7 @@ def build_one(path: Path, output_root: Path, time_window_min: float) -> dict:
         & np.isfinite(direction)
         & np.isfinite(speed)
         & (speed >= 0.0)
-        & (speed <= 75.0)
+        & (speed < 75.0)
     )
     u_wind, v_wind = to_uv(speed, direction)
     output_dir = output_root / "obs"

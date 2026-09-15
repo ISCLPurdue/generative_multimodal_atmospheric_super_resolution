@@ -11,6 +11,8 @@ src/results/
 outputs/
 runs/
 checkpoints/
+/artifacts/
+/datasets/
 /data/
 *.npy
 *.npz
@@ -18,10 +20,14 @@ checkpoints/
 *.pt
 *.pth
 *.ckpt
+*.safetensors
+*.onnx
+*.joblib
 *.h5
 *.hdf5
 *.nc
+*.parquet
+*.feather
 *.zarr/
 *.out
 *.err
-src/igra_gen/0$[}]

@@ -48,8 +48,8 @@ class EDMPrecond(torch.nn.Module):
         return x
 
     def forward(self, x, sigma, condition=None, auxilary=None, **model_kwargs):
-        # TODO: need we push x, sigma, auxilary, F_x .to(torch.float32) ?
-        # EDM sets these values manually, but we're using torch.autocast
+        # EDM sets tensor precision explicitly; this implementation uses
+        # torch.autocast for the forward pass.
         sigma = sigma.reshape(-1, 1, 1, 1)
         auxilary = (
             None

@@ -6,8 +6,12 @@ users to provide all data and model paths explicitly.
 
 ## Files
 
-- `run_2020_evaluation.py`: annual R, R+A, R+S, and R+A+S conditioning runs.
-- `run_2020_holdout.py`: 24-case aircraft or surface-station holdout run.
+- `run_2020_evaluation.py`: annual R, R+A, R+S, and R+A+S posterior-sampling
+  runs.
+- `run_2020_holdout.py`: 24-case aircraft or surface-station held-out-
+  conditioning posterior-sampling run.
+- `create_2020_holdout_split.py`: reproducible 80/20 cell-based split for the
+  24 held-out-evaluation analysis times.
 - `config/selected_interface_2019.json`: selected likelihood parameters and
   interface settings.
 - `manifests/evaluation_timesteps_2020.json`: the 723 annual evaluation
@@ -19,3 +23,38 @@ The original runs used 16 ensemble members, 50 EDM denoising steps, and base
 seed 17. The annual wrappers accept `--ensemble`, `--steps`, and `--seed` so a
 small smoke test can be run before launching the full calculation.
 
+The selected aircraft interface uses MADIS `dataSource` codes 0, 1, and 5.
+Both wrappers read these codes from `selected_interface_2019.json` and pass
+them explicitly to the sampler.
+
+## Creating the held-out splits
+
+Create separate aircraft and surface roots before running the corresponding
+held-out posterior-sampling comparison:
+
+```bash
+python reproduction/create_2020_holdout_split.py \
+  --source aircraft \
+  --input-root /path/to/processed_madis_aircraft_2020 \
+  --output-root /path/to/aircraft_holdout_root \
+  --era5-root /path/to/era5_1.40625deg
+
+python reproduction/create_2020_holdout_split.py \
+  --source surface \
+  --input-root /path/to/processed_madis_metar_2020 \
+  --output-root /path/to/surface_holdout_root \
+  --era5-root /path/to/era5_1.40625deg
+```
+
+For each analysis time, the surface split excludes a random 20% of the union
+of surface-observed ERA5 cells. The aircraft split independently excludes a
+random 20% of observed ERA5 cells for each of the six aircraft-targeted
+variables. Both use base seed 17 and write the retained targets to `obs/`, the
+excluded targets to `heldout_obs/`, and an auditable split manifest and CSV
+summary alongside them.
+
+The two wrappers generate posterior samples and per-run metadata. They do not
+perform the downstream metric aggregation, bootstrap analysis, or figure and
+table generation reported in the manuscript. The corresponding downstream
+scripts and compact reported summaries are documented in
+[`../analysis/README.md`](../analysis/README.md).
