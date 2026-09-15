@@ -1,6 +1,6 @@
 # Generative Atmospheric Super-Resolution across Heterogeneous Observing Systems through Composable Interfaces
 
-[Release v1.0.0](https://github.com/ISCLPurdue/generative_multimodal_atmospheric_super_resolution/releases/tag/v1.0.0)
+[Release v1.0.1](https://github.com/ISCLPurdue/generative_multimodal_atmospheric_super_resolution/releases/tag/v1.0.1)
 · [Data and model inputs](DATA.md)
 · [Reproduction](reproduction/README.md)
 · [Reported analyses](analysis/README.md)
@@ -95,7 +95,7 @@ summaries are documented under [`analysis/`](analysis/README.md).
 
 Citation metadata are provided in [`CITATION.cff`](CITATION.cff). For a fixed
 software snapshot, please cite the
-[`v1.0.0` release](https://github.com/ISCLPurdue/generative_multimodal_atmospheric_super_resolution/releases/tag/v1.0.0).
+[`v1.0.1` release](https://github.com/ISCLPurdue/generative_multimodal_atmospheric_super_resolution/releases/tag/v1.0.1).
 The associated manuscript citation will be added after the preprint is posted.
 This repository does not require a Zenodo DOI.
 

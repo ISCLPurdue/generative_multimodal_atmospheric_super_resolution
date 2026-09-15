@@ -2,7 +2,7 @@ cff-version: 1.2.0
 message: "Please cite this software release and the associated manuscript."
 title: "Generative Atmospheric Super-Resolution across Heterogeneous Observing Systems through Composable Interfaces"
 type: software
-version: 1.0.0
+version: 1.0.1
 date-released: 2026-09-15
 authors:
   - family-names: Xu

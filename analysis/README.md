@@ -10,8 +10,8 @@ posterior sample arrays described in `../DATA.md`.
 - `scripts/`: final annual, held-out-observation, probabilistic, dispersion,
   composition, spatial, and plotting analyses.
 - `summary_tables/`: compact CSV outputs underlying the principal numerical
-  claims in manuscript V171.
-- `manuscript_tables/`: the LaTeX tables included by manuscript V171.
+  claims in manuscript V172.
+- `manuscript_tables/`: the LaTeX tables included by manuscript V172.
 
 ## Claim-to-artifact map
 
