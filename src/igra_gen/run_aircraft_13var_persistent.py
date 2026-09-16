@@ -961,6 +961,9 @@ class PersistentFullPoolRunner:
             grid_native_points=np.asarray(grid_native_points, dtype=np.int64),
             grid_count=np.asarray(obs_count if obs_count is not None else np.zeros((0,), dtype=np.int64), dtype=np.int64),
             grid_mask=np.asarray(obs_mask if obs_mask is not None else np.zeros((0,), dtype=bool), dtype=bool),
+            aircraft_channel_indices=np.asarray(aircraft_channel_indices if aircraft_channel_indices is not None else np.zeros((0,), dtype=np.int64), dtype=np.int64),
+            aircraft_grid_masks=np.asarray(aircraft_masks if aircraft_masks is not None else np.zeros((0,), dtype=bool), dtype=bool),
+            # Backward-compatible aliases retained for existing local readers.
             wind_channel_indices=np.asarray(aircraft_channel_indices if aircraft_channel_indices is not None else np.zeros((0,), dtype=np.int64), dtype=np.int64),
             wind_grid_masks=np.asarray(aircraft_masks if aircraft_masks is not None else np.zeros((0,), dtype=bool), dtype=bool),
             surface_channel_indices=np.asarray(surface_channel_indices if surface_channel_indices is not None else np.zeros((0,), dtype=np.int64), dtype=np.int64),

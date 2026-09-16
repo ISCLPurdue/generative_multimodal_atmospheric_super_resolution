@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Redraw RMSE-change figures with the manuscript's unified terminology.
 
-The archived composition table contains both competing annual summaries.  This
+The composition table contains the annual summaries. This
 script deliberately uses ``mean_pct_delta_over_timesteps``: the relative RMSE
 change is computed within each matched analysis time and then averaged across
 the 723 analysis times.  No posterior samples are recomputed.
@@ -220,7 +220,7 @@ def variable_category(name: str) -> tuple[str, str, str]:
 
 
 def draw_per_variable_intervals() -> None:
-    """Redraw the Appendix intervals with the same archived estimates."""
+    """Redraw the Appendix intervals from the reported estimates."""
     data = pd.read_csv(BOOTSTRAP_SUMMARY)
     data = data[data["region"].eq("strict_conus")].copy()
     data = data.set_index("var_short").loc[list(VARIABLE_ORDER)]

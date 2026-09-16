@@ -45,6 +45,14 @@ class ReleaseConfigurationTests(unittest.TestCase):
         cls.holdout = load_module(
             "holdout_wrapper", REPO_ROOT / "reproduction/run_2020_holdout.py"
         )
+        cls.split = load_module(
+            "holdout_split",
+            REPO_ROOT / "reproduction/create_2020_holdout_split.py",
+        )
+        cls.targets = load_module(
+            "holdout_targets",
+            REPO_ROOT / "reproduction/build_holdout_cell_targets.py",
+        )
 
     def production_stub(self):
         return SimpleNamespace(
@@ -98,6 +106,63 @@ class ReleaseConfigurationTests(unittest.TestCase):
         self.assertEqual(len(set(holdout)), 24)
         self.assertTrue(all(int(value) % 2 == 0 for value in evaluation))
         self.assertTrue(all(int(value) % 2 == 0 for value in holdout))
+
+    def test_holdout_split_applies_conus_before_cell_selection(self):
+        locations = np.asarray(
+            [[35.0, -100.0], [40.0, -80.0], [51.0, -100.0]],
+            dtype=np.float32,
+        )
+        np.testing.assert_array_equal(
+            self.split.conus_mask(locations), [True, True, False]
+        )
+        lat = np.linspace(-90.0, 90.0, 128, dtype=np.float32)
+        lon = np.linspace(0.0, 360.0, 256, endpoint=False, dtype=np.float32)
+        with tempfile.TemporaryDirectory() as tmpdir:
+            path = Path(tmpdir) / "aircraft.npz"
+            arrays = {}
+            for variable in self.split.AIRCRAFT_VARIABLES:
+                arrays[f"{variable}_locs"] = locations
+                arrays[f"{variable}_vals"] = np.asarray([1.0, 2.0, 3.0])
+                arrays[f"{variable}_data_source"] = np.asarray([0, 0, 0])
+                arrays[f"{variable}_source_product"] = np.asarray(
+                    ["acars", "acars", "acars"]
+                )
+            np.savez(path, **arrays)
+            with np.load(path, allow_pickle=False) as data:
+                retained, excluded, rows = self.split.split_aircraft(
+                    data,
+                    timestep=0,
+                    lat_axis=lat,
+                    lon_axis=lon,
+                    seed=17,
+                    holdout_fraction=0.5,
+                    allowed_source_codes={0, 1, 5},
+                )
+        for variable in self.split.AIRCRAFT_VARIABLES:
+            kept = retained[f"{variable}_locs"]
+            left_out = excluded[f"{variable}_locs"]
+            self.assertEqual(kept.shape[0] + left_out.shape[0], 2)
+            self.assertTrue(self.split.conus_mask(kept).all())
+            self.assertTrue(self.split.conus_mask(left_out).all())
+        self.assertTrue(all(row["n_input_obs"] == 3 for row in rows))
+        self.assertTrue(all(row["n_eligible_obs"] == 2 for row in rows))
+
+    def test_holdout_target_builder_averages_within_cell(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            path = Path(tmpdir) / "madis_aircraft_13var_t0042.npz"
+            np.savez(
+                path,
+                temperature_500_vals=np.asarray([2.0, 4.0, 9.0]),
+                temperature_500_era5_flat_cells=np.asarray([7, 7, 11]),
+            )
+            rows = self.targets.cell_mean_rows(
+                path, "aircraft", ["temperature_500"], "CONUS"
+            )
+        self.assertEqual(len(rows), 2)
+        self.assertEqual(rows[0]["spatial_domain"], "CONUS")
+        self.assertEqual(rows[0]["flat_cell"], 7)
+        self.assertEqual(rows[0]["target"], 3.0)
+        self.assertEqual(rows[0]["n_obs_in_target"], 2)
 
     def test_holdout_uses_same_aircraft_sources(self):
         production = self.production_stub()
@@ -160,8 +225,8 @@ class ReleaseConfigurationTests(unittest.TestCase):
             citation,
         )
         self.assertNotIn("doi:", citation.lower())
-        self.assertIn("version: 1.0.3", citation)
-        self.assertIn("date-released: 2026-09-15", citation)
+        self.assertIn("version: 1.0.4", citation)
+        self.assertIn("date-released: 2026-09-16", citation)
 
     def test_internal_release_documents_are_not_packaged(self):
         for name in (
@@ -214,10 +279,20 @@ class ReleaseConfigurationTests(unittest.TestCase):
             if row["method"] == "heldout80"
         }
         self.assertAlmostEqual(float(selected["surface"]["mean_effect_pct"]), -13.4992, places=3)
-        self.assertAlmostEqual(float(selected["aircraft"]["mean_effect_pct"]), -8.0574, places=3)
+        self.assertAlmostEqual(float(selected["aircraft"]["mean_effect_pct"]), -11.7137, places=3)
+        self.assertEqual(int(selected["aircraft"]["n_timesteps"]), 24)
+        self.assertAlmostEqual(
+            float(selected["aircraft"]["improved_timestep_fraction"]),
+            23 / 24,
+        )
         self.assertTrue(
             all(float(row["ci95_high_pct"]) < 0.0 for row in selected.values())
         )
+        manuscript_table = (
+            REPO_ROOT / "analysis/manuscript_tables/heldout_observation_evaluation.tex"
+        ).read_text(encoding="utf-8")
+        self.assertIn("2020 CONUS observations", manuscript_table)
+        self.assertIn("$-11.71\\%$ & $[-14.48,-9.00]\\%$ & $23/24$", manuscript_table)
 
     def test_resolved_prior_configuration_is_packaged(self):
         text = PRIOR_CONFIG_PATH.read_text(encoding="utf-8")

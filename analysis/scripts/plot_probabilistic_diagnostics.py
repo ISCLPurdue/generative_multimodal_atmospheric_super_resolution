@@ -49,6 +49,7 @@ def configure_plotting() -> None:
 
 
 def save(figure: plt.Figure, stem: str) -> None:
+    FIGURES.mkdir(parents=True, exist_ok=True)
     figure.savefig(FIGURES / f"{stem}.pdf", bbox_inches="tight")
     figure.savefig(FIGURES / f"{stem}.png", dpi=300, bbox_inches="tight")
     plt.close(figure)

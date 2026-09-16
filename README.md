@@ -1,7 +1,6 @@
 # Generative Atmospheric Super-Resolution across Heterogeneous Observing Systems through Composable Interfaces
 
-**Release candidate v1.0.3**
-· [Data and model inputs](DATA.md)
+[Data and model inputs](DATA.md)
 · [Reproduction](reproduction/README.md)
 · [Reported analyses](analysis/README.md)
 · [Citation](#citation)
@@ -91,6 +90,12 @@ Inspect the annual evaluation interface with:
 python reproduction/run_2020_evaluation.py --help
 ```
 
+Run the repository checks with:
+
+```bash
+python -m unittest discover -s tests -v
+```
+
 The complete annual and held-out-observation commands are documented in
 [`reproduction/README.md`](reproduction/README.md).
 
@@ -98,10 +103,10 @@ The complete annual and held-out-observation commands are documented in
 
 This repository does not redistribute ERA5 fields, NOAA observations,
 processed observation products, trained model weights, or generated posterior
-samples. Their expected roles and public providers are documented in
-[`DATA.md`](DATA.md). The public wrappers accept all data, checkpoint, and
-output locations as command-line arguments and do not require the original
-Purdue filesystem layout.
+samples. [`DATA.md`](DATA.md) identifies the public providers for the source
+observations and ERA5 and documents the local formats expected for all external
+inputs. The public wrappers accept all data, checkpoint, and output locations
+as command-line arguments and do not require the original filesystem layout.
 
 The selected interface settings are recorded in
 [`reproduction/config/selected_interface_2019.json`](reproduction/config/selected_interface_2019.json),
@@ -112,7 +117,10 @@ summaries are documented under [`analysis/`](analysis/README.md).
 
 The repository includes the inference architecture and resolved configuration
 for the fixed atmospheric prior used in the study, but not its original
-training pipeline. The pretrained checkpoint is an external input.
+training pipeline. The pretrained checkpoint, processed fields and
+observations, and posterior arrays are external inputs. The release is
+therefore a paper-aligned research-code and analysis snapshot rather than a
+self-contained data-and-model distribution.
 
 ## Citation
 
@@ -120,7 +128,6 @@ Citation metadata are provided in [`CITATION.cff`](CITATION.cff). For a fixed
 software snapshot, please cite the GitHub release associated with the version
 used.
 The associated manuscript citation will be added after the preprint is posted.
-This repository does not require a Zenodo DOI.
 
 ## License
 
