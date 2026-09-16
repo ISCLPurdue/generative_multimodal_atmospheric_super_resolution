@@ -225,8 +225,12 @@ class ReleaseConfigurationTests(unittest.TestCase):
             citation,
         )
         self.assertNotIn("doi:", citation.lower())
-        self.assertIn("version: 1.0.4", citation)
+        self.assertIn("version: 1.0.5", citation)
         self.assertIn("date-released: 2026-09-16", citation)
+        self.assertIn("license: MIT", citation)
+        license_text = (REPO_ROOT / "LICENSE").read_text(encoding="utf-8")
+        self.assertTrue(license_text.startswith("MIT License\n"))
+        self.assertIn("Copyright (c) 2026 Yang Xu and contributors", license_text)
 
     def test_internal_release_documents_are_not_packaged(self):
         for name in (
