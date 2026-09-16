@@ -131,7 +131,7 @@ The associated manuscript citation will be added after the preprint is posted.
 
 ## License
 
-No project-wide license has been assigned.
+This project is released under the [MIT License](LICENSE).
 
 ## Acknowledgments
 
