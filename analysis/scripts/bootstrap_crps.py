@@ -6,10 +6,11 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
+from analysis_paths import output_path, required_path
 
-ROOT = Path("/depot/rmaulik/data/yangxu/reports/2026/07312026report/20260731__frozen2019_full723_probabilistic_diagnostics")
-PAIRED = ROOT / "tables/paired_metrics_by_timestep_variable_region.csv"
-OUT = ROOT / "tables/crps_14day_moving_block_intervals.csv"
+ROOT = output_path("PROBABILISTIC_ANALYSIS_OUTPUT_ROOT", "probabilistic_metrics")
+PAIRED = required_path("PAIRED_CRPS_METRICS_CSV")
+OUT = ROOT / "tables/crps_14day_intervals.csv"
 GROUPS = {
     "all_13_variables": lambda frame: np.ones(len(frame), dtype=bool),
     "surface_targeted_variables": lambda frame: frame["is_surface_targeted"].to_numpy(bool),
@@ -35,6 +36,7 @@ def block_interval(values: np.ndarray, rng: np.random.Generator) -> tuple[float,
 
 
 def main() -> None:
+    OUT.parent.mkdir(parents=True, exist_ok=True)
     frame = pd.read_csv(PAIRED)
     if frame["timestep"].mod(2).any():
         raise ValueError("Expected the 00/12 UTC evaluation calendar to use even six-hour indices")

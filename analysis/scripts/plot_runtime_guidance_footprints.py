@@ -7,8 +7,6 @@ import os
 from pathlib import Path
 import struct
 
-os.environ.setdefault("MPLCONFIGDIR", "/home/xu2279/.tmp/matplotlib")
-
 import matplotlib
 
 matplotlib.use("Agg")
@@ -16,19 +14,10 @@ import matplotlib.pyplot as plt
 from matplotlib.colors import LinearSegmentedColormap, LogNorm
 import numpy as np
 
+from analysis_paths import required_path
 
-ROOT = Path("/depot/rmaulik/data/yangxu")
-TRACE = (
-    ROOT
-    / "runs/observation_interface_independent_year_2019"
-    / "20260909__frozen2019_RAS_t0000_instrumented_trace_all13_v168"
-    / "outputs/runtime_modality_score_maps_t0000.npz"
-)
-SHAPEFILE = (
-    ROOT
-    / "data_aux/natural_earth/ne_110m_admin_0_countries"
-    / "ne_110m_admin_0_countries.shp"
-)
+TRACE = required_path("RUNTIME_GUIDANCE_TRACE_NPZ")
+SHAPEFILE = required_path("NATURAL_EARTH_SHAPEFILE")
 FIGURES = Path(__file__).resolve().parents[1] / "figures"
 
 STEP_INDICES = [0, 25, 49]
@@ -245,7 +234,7 @@ def main() -> None:
         [r"$3\times10^{-3}$", r"$10^{-2}$", r"$10^{0}$", r"$10^{2}$", r"$10^{3}$"]
     )
 
-    stem = FIGURES / "runtime_guidance_spatial_footprints_all13_white_floor_v169"
+    stem = FIGURES / "runtime_guidance_spatial_footprints"
     figure.savefig(stem.with_suffix(".pdf"), bbox_inches="tight")
     figure.savefig(stem.with_suffix(".png"), dpi=300, bbox_inches="tight")
     plt.close(figure)

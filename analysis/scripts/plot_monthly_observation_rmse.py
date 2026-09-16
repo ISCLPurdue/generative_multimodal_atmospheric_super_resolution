@@ -10,21 +10,13 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 
+from analysis_paths import required_path
 
-ROOT = Path("/depot/rmaulik/data/yangxu")
 VERSION_ROOT = Path(__file__).resolve().parents[1]
 FIGURE_DIR = VERSION_ROOT / "figures"
 
-METAR_MONTHLY = (
-    ROOT
-    / "reports/2026/06252026report/20260625__madis_metar_surface_2020_12h_obs_vs_era5_audit"
-    / "tables/madis_metar_2020_12h_obs_vs_era5_monthly.csv"
-)
-ABO_TIMESTEP = (
-    ROOT
-    / "reports/2026/07192026report/20260719__manuscript_user_selected_figures_batch1"
-    / "tables/abo_keep015_around25_obs_vs_era5_by_timestep.csv"
-)
+METAR_MONTHLY = required_path("METAR_MONTHLY_DIAGNOSTICS_CSV")
+ABO_TIMESTEP = required_path("AIRCRAFT_TIMESTEP_DIAGNOSTICS_CSV")
 
 
 def configure_style() -> None:
@@ -144,7 +136,7 @@ def plot_surface_station_monthly() -> tuple[Path, Path]:
         fontweight="bold",
     )
     return save_figure(
-        figure, "figure12_surface_station_monthly_observation_era5_rmse_v141"
+        figure, "figure12_surface_station_monthly_observation_rmse"
     )
 
 
@@ -207,7 +199,7 @@ def plot_aircraft_monthly() -> tuple[Path, Path]:
         fontweight="bold",
     )
     return save_figure(
-        figure, "figure13_aircraft_monthly_observation_era5_rmse_v141"
+        figure, "figure13_aircraft_monthly_observation_rmse"
     )
 
 

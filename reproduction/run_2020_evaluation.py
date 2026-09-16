@@ -14,6 +14,7 @@ sys.path.insert(0, str(REPO_ROOT / "src"))
 
 
 CONFIG_PATH = REPO_ROOT / "reproduction/config/selected_interface_2019.json"
+PRIOR_CONFIG_PATH = REPO_ROOT / "reproduction/config/atmospheric_prior_13var.yaml"
 TIMESTEP_PATH = REPO_ROOT / "reproduction/manifests/evaluation_timesteps_2020.json"
 
 
@@ -42,13 +43,13 @@ def register_experiment(
     elif configuration == "R+A":
         spec = {
             "use_igra": True,
-            "obs_mode": "aircraft_around25",
+            "obs_mode": "aircraft_pressure_window_25hpa",
             "obs_modality": "aircraft",
             "obs_space": "aircraft_cell_mean_grid",
             "aircraft_source_filter": "acars",
             "aircraft_spatial_support": "strict_conus",
             "aircraft_grid_aggregation": "equal",
-            "aircraft_pressure_window_name": "around25",
+            "aircraft_pressure_window_name": "within_25_hpa",
             "aircraft_data_sources": aircraft_data_sources,
             "description": "Paper R+A configuration.",
         }
@@ -66,13 +67,13 @@ def register_experiment(
     else:
         spec = {
             "use_igra": True,
-            "obs_mode": "aircraft_around25",
+            "obs_mode": "aircraft_pressure_window_25hpa",
             "obs_modality": "aircraft_surface",
             "obs_space": "aircraft_surface_cell_mean_grid",
             "aircraft_source_filter": "acars",
             "aircraft_spatial_support": "strict_conus",
             "aircraft_grid_aggregation": "equal",
-            "aircraft_pressure_window_name": "around25",
+            "aircraft_pressure_window_name": "within_25_hpa",
             "aircraft_data_sources": aircraft_data_sources,
             "surface_variables": production.SURFACE_METAR_VARIABLES,
             "surface_spatial_support": "strict_conus",
@@ -89,7 +90,7 @@ def parse_args() -> argparse.Namespace:
         "--configuration", choices=["R", "R+A", "R+S", "R+A+S"], required=True
     )
     parser.add_argument("--checkpoint", type=Path, required=True)
-    parser.add_argument("--hydra-config", type=Path, required=True)
+    parser.add_argument("--hydra-config", type=Path, default=PRIOR_CONFIG_PATH)
     parser.add_argument("--era5-root", type=Path, required=True)
     parser.add_argument("--igra-pkl", type=Path, required=True)
     parser.add_argument("--aircraft-root", type=Path)
@@ -142,7 +143,6 @@ def main() -> None:
         "steps": steps,
         "seed": args.seed,
         "interface_config": str(args.interface_config.resolve()),
-        "internal_source_commit": config["internal_source_commit"],
         "aircraft_data_sources": aircraft_data_sources,
     }
     (output_root / "resolved_run.json").write_text(
@@ -155,12 +155,12 @@ def main() -> None:
         seed=args.seed,
         num_steps=steps,
         igra_pkl=str(args.igra_pkl),
-        aircraft_around25_root=str(args.aircraft_root or Path(".")),
+        aircraft_root=str(args.aircraft_root or Path(".")),
         surface_metar_root=str(args.surface_root or Path(".")),
         checkpoint=str(args.checkpoint),
         era5_root=str(args.era5_root),
         hydra_cfg=str(args.hydra_config),
-        likelihood_mode="multimodal",
+        likelihood_structure="source_specific",
         std_igra=float(selected["igra_std"]),
         gamma_igra=float(selected["igra_gamma"]),
         lambda_igra=float(selected["igra_lambda"]),

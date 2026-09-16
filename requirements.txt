@@ -1,9 +1,7 @@
 # Core ML and scientific computing
 torch>=2.6.0
 numpy>=2.1.3
-scipy>=1.15.2
 matplotlib>=3.10.1
-scikit-learn>=1.5.2
 pandas>=2.2.3
 
 # Data handling
@@ -11,14 +9,12 @@ h5py>=3.13.0
 xarray>=2025.1.2
 dask>=2025.2.0
 netCDF4>=1.7.2
+pyshp>=2.3.1
 
-# Configuration and experiment management
+# Configuration
 hydra-core>=1.3.2
 omegaconf>=2.3.0
-wandb>=0.19.11
 
-# Model and runtime utilities
+# Inference utilities
 torchdiffeq>=0.2.5
-torchinfo>=1.8.0
-psutil>=7.0.0
 einops>=0.8.1

@@ -4,21 +4,16 @@
 from __future__ import annotations
 
 import argparse
-import importlib.util
 import json
 import os
-import sys
 from collections import defaultdict
 from pathlib import Path
 from typing import Any
 
 import numpy as np
 
-from independent_year_common import six_hour_index
-
-
-SCRIPT_DIR = Path(__file__).resolve().parent
-DIAG_PATH = SCRIPT_DIR / "diagnose_madis_aircraft_vs_era5.py"
+import madis_aircraft_io
+from observation_preprocessing_common import six_hour_index
 
 DEFAULT_WINDOWS = {
     500: (475.0, 525.0),
@@ -33,16 +28,6 @@ VARIABLES = [
     ("u_component_of_wind_850", "u", 850),
     ("v_component_of_wind_850", "v", 850),
 ]
-
-
-def load_diag_module() -> Any:
-    spec = importlib.util.spec_from_file_location("madis_diag", DIAG_PATH)
-    if spec is None or spec.loader is None:
-        raise RuntimeError(f"Could not load {DIAG_PATH}")
-    mod = importlib.util.module_from_spec(spec)
-    sys.modules[spec.name] = mod
-    spec.loader.exec_module(mod)
-    return mod
 
 
 def lon_to_180(lon: np.ndarray) -> np.ndarray:
@@ -121,7 +106,6 @@ def parse_window(text: str) -> tuple[float, float]:
 
 def process_file(
     path: Path,
-    diag: Any,
     grouped: dict[int, dict[str, VarStore]],
     source_files: dict[int, list[str]],
     windows: dict[int, tuple[float, float]],
@@ -133,41 +117,44 @@ def process_file(
     except ImportError as exc:
         raise SystemExit("netCDF4 is required") from exc
 
-    product = "acarsProfiles" if "acarsProfiles" in str(path) else "acars"
-    dt = diag.parse_datetime(path)
+    if "acarsProfiles" in str(path):
+        raise ValueError(
+            "This paper release uses the MADIS point/acars product only; "
+            f"received {path}"
+        )
+    product = "acars"
+    dt = madis_aircraft_io.parse_datetime(path)
     t_index = six_hour_index(dt)
     file_list = source_files[t_index]
     file_id = len(file_list)
     file_list.append(str(path))
 
-    tmp = diag.decode_to_temp(path)
+    tmp = madis_aircraft_io.decode_to_temp(path)
     try:
         with Dataset(tmp, "r") as ds:
-            temp = diag.read_var(ds, "temperature")
-            wind_speed = diag.read_var(ds, "windSpeed")
-            wind_dir = diag.read_var(ds, "windDir")
-            altitude = diag.read_var(ds, "altitude")
+            temp = madis_aircraft_io.read_var(ds, "temperature")
+            wind_speed = madis_aircraft_io.read_var(ds, "windSpeed")
+            wind_dir = madis_aircraft_io.read_var(ds, "windDir")
+            altitude = madis_aircraft_io.read_var(ds, "altitude")
             if temp is None or altitude is None:
                 return
-            data_source = diag.read_var(ds, "dataSource")
+            data_source = madis_aircraft_io.read_var(ds, "dataSource")
             if data_source is None:
                 data_source = np.full(temp.shape, -1, dtype=np.int16)
             else:
                 data_source = np.asarray(data_source, dtype=np.int16)
-            lat2, lon2, _location_source = diag.read_locations(ds, temp.shape)
+            lat2, lon2 = madis_aircraft_io.read_locations(ds, temp.shape)
             if lat2 is None or lon2 is None:
                 return
             lon2 = lon_to_180(lon2)
-            pressure = diag.pressure_hpa_from_altitude_m(altitude)
-            u, v = diag.to_uv(wind_speed, wind_dir)
+            pressure = madis_aircraft_io.pressure_hpa_from_altitude_m(altitude)
+            u, v = madis_aircraft_io.to_uv(wind_speed, wind_dir)
 
             loc_qc = (
-                (diag.read_qcr(ds, "latitude", temp.shape) == 0)
-                & (diag.read_qcr(ds, "longitude", temp.shape) == 0)
-                & (diag.read_qcr(ds, "altitude", temp.shape) == 0)
+                (madis_aircraft_io.read_qcr(ds, "latitude", temp.shape) == 0)
+                & (madis_aircraft_io.read_qcr(ds, "longitude", temp.shape) == 0)
+                & (madis_aircraft_io.read_qcr(ds, "altitude", temp.shape) == 0)
             )
-            # trackLat/trackLon do not always have paired QCR fields in the same
-            # way as latitude/longitude; require finite track coordinates above.
             base = (
                 loc_qc
                 & np.isfinite(lat2)
@@ -180,10 +167,10 @@ def process_file(
                 base = base & np.isin(data_source, list(keep_data_sources))
             if exclude_data_sources:
                 base = base & (~np.isin(data_source, list(exclude_data_sources)))
-            temp_qc = (diag.read_qcr(ds, "temperature", temp.shape) == 0) & (temp > 180.0) & (temp < 330.0)
+            temp_qc = (madis_aircraft_io.read_qcr(ds, "temperature", temp.shape) == 0) & (temp > 180.0) & (temp < 330.0)
             wind_qc = (
-                (diag.read_qcr(ds, "windSpeed", temp.shape) == 0)
-                & (diag.read_qcr(ds, "windDir", temp.shape) == 0)
+                (madis_aircraft_io.read_qcr(ds, "windSpeed", temp.shape) == 0)
+                & (madis_aircraft_io.read_qcr(ds, "windDir", temp.shape) == 0)
                 & np.isfinite(wind_speed)
                 & np.isfinite(wind_dir)
                 & (wind_speed >= 0.0)
@@ -245,15 +232,18 @@ def write_outputs(
                     "variable": variable,
                     "n_obs": int(arrays["vals"].size),
                     "n_acars": int(np.sum(arrays["source_product"] == "acars")) if arrays["vals"].size else 0,
-                    "n_acarsProfiles": int(np.sum(arrays["source_product"] == "acarsProfiles")) if arrays["vals"].size else 0,
                 }
             )
         metadata = {
             "era5_timestep_index": t_index,
             "pressure_windows_hpa": windows,
-            "location_protocol": "acarsProfiles uses trackLat/trackLon when available; acars uses latitude/longitude.",
+            "location_protocol": "MADIS point/acars latitude and longitude",
             "pressure_protocol": "pressure_hpa_alt_derived from MADIS pressure altitude using standard-atmosphere conversion",
-            "qcr_policy": "kept observations require QCR==0 for altitude and relevant physical variables; finite lat/lon and physical range filters applied",
+            "qcr_policy": (
+                "kept observations require QCR==0 for the MADIS latitude, "
+                "longitude, altitude, and applicable temperature or wind fields; "
+                "finite-coordinate and physical-range filters are also applied"
+            ),
             "excluded_data_sources": sorted(exclude_data_sources),
             "kept_data_sources": sorted(keep_data_sources),
         }
@@ -265,17 +255,26 @@ def write_outputs(
     import csv
 
     with summary_path.open("w", newline="") as f:
-        writer = csv.DictWriter(f, fieldnames=list(rows[0].keys()))
+        writer = csv.DictWriter(
+            f,
+            fieldnames=[
+                "timestep",
+                "era5_timestep_index",
+                "variable",
+                "n_obs",
+                "n_acars",
+            ],
+        )
         writer.writeheader()
         writer.writerows(rows)
     (out_root / "README.md").write_text(
         "# MADIS Aircraft 13-var NPZ Observations\n\n"
         "This directory contains auditable per-timestep aircraft observation NPZ files.\n\n"
-        "- Source products: `acars`, `acarsProfiles`\n"
+        "- Source product: MADIS `point/acars`\n"
         f"- Pressure windows: 500 hPa = {windows[500][0]:g}-{windows[500][1]:g}, "
         f"850 hPa = {windows[850][0]:g}-{windows[850][1]:g}\n"
         "- Pressure field: `pressure_hpa_alt_derived`, derived from MADIS pressure altitude\n"
-        "- Location protocol: `acarsProfiles` uses `trackLat/trackLon` when available\n"
+        "- Location fields: MADIS `latitude` and `longitude`\n"
         f"- Kept MADIS dataSource codes: {sorted(keep_data_sources) if keep_data_sources else 'all except excluded'}\n"
         f"- Excluded MADIS dataSource codes: {sorted(exclude_data_sources)}\n"
         "- Timestep indices are zero-based six-hour indices within each source file's calendar year.\n"
@@ -310,11 +309,10 @@ def main() -> None:
     keep_data_sources = {
         int(x.strip()) for x in args.keep_data_sources.split(",") if x.strip()
     }
-    diag = load_diag_module()
     grouped: dict[int, dict[str, VarStore]] = defaultdict(lambda: defaultdict(VarStore))
     source_files: dict[int, list[str]] = defaultdict(list)
     for path in args.files:
-        process_file(path, diag, grouped, source_files, windows, exclude_data_sources, keep_data_sources)
+        process_file(path, grouped, source_files, windows, exclude_data_sources, keep_data_sources)
     write_outputs(grouped, source_files, args.out_root, windows, exclude_data_sources, keep_data_sources)
 
 

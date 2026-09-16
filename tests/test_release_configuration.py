@@ -13,6 +13,7 @@ import numpy as np
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 CONFIG_PATH = REPO_ROOT / "reproduction/config/selected_interface_2019.json"
+PRIOR_CONFIG_PATH = REPO_ROOT / "reproduction/config/atmospheric_prior_13var.yaml"
 EVALUATION_TIMESTEPS = (
     REPO_ROOT / "reproduction/manifests/evaluation_timesteps_2020.json"
 )
@@ -68,14 +69,11 @@ class ReleaseConfigurationTests(unittest.TestCase):
             self.assertNotIn(
                 "aircraft_source_policy_name", production.EXPERIMENTS[name]
             )
-            self.assertNotIn(
-                "superob", production.EXPERIMENTS[name]["obs_space"]
-            )
             self.assertEqual(
                 production.EXPERIMENTS[name]["aircraft_source_filter"], "acars"
             )
 
-    def test_frozen_likelihood_parameters_match_manuscript(self):
+    def test_selected_likelihood_parameters_match_manuscript(self):
         self.assertEqual(
             self.config["selected_parameters"],
             {
@@ -134,10 +132,18 @@ class ReleaseConfigurationTests(unittest.TestCase):
             )
             np.testing.assert_allclose(operator.igra_op.lat.numpy(), lat)
 
-    def test_dormant_satellite_branch_is_absent(self):
-        self.assertFalse(
-            (REPO_ROOT / "src/igra_gen/sample_lsf_airtemp_common_native.py").exists()
+    def test_satellite_sampling_branch_is_absent(self):
+        self.assertFalse(list((REPO_ROOT / "src/igra_gen").glob("sample_lsf_*")))
+
+    def test_aircraft_preprocessing_uses_release_io_module(self):
+        scripts = REPO_ROOT / "scripts"
+        self.assertTrue((scripts / "madis_aircraft_io.py").exists())
+        self.assertFalse((scripts / "diagnose_madis_aircraft_vs_era5.py").exists())
+        downloader = (scripts / "download_madis_aircraft_hours.sh").read_text(
+            encoding="utf-8"
         )
+        self.assertIn('download_one "acars"', downloader)
+        self.assertNotIn("acarsProfiles", downloader)
 
     def test_readme_keeps_author_selected_summary_wording(self):
         readme = (REPO_ROOT / "README.md").read_text(encoding="utf-8")
@@ -154,7 +160,7 @@ class ReleaseConfigurationTests(unittest.TestCase):
             citation,
         )
         self.assertNotIn("doi:", citation.lower())
-        self.assertIn("version: 1.0.2", citation)
+        self.assertIn("version: 1.0.3", citation)
         self.assertIn("date-released: 2026-09-15", citation)
 
     def test_internal_release_documents_are_not_packaged(self):
@@ -172,11 +178,11 @@ class ReleaseConfigurationTests(unittest.TestCase):
             for row in annual
             if row["region"] == "strict_conus" and row["variable_set"] == "all13"
         )
-        self.assertEqual(int(conus_all["n_full723"]), 723)
+        self.assertEqual(int(conus_all["n_evaluation_times"]), 723)
         self.assertEqual(int(conus_all["block_days"]), 14)
-        self.assertAlmostEqual(float(conus_all["mean_effect_pct_full723"]), -9.2363, places=3)
+        self.assertAlmostEqual(float(conus_all["mean_effect_pct"]), -9.2363, places=3)
         self.assertLess(float(conus_all["ci95_primary_high_pct"]), 0.0)
-        self.assertNotIn("paired_t_p_effect_pct_full723", conus_all)
+        self.assertFalse(any("paired_t" in column for column in conus_all))
 
         per_variable = read_csv(
             SUMMARY_ROOT / "annual_rmse_14day_intervals_by_variable.csv"
@@ -200,6 +206,8 @@ class ReleaseConfigurationTests(unittest.TestCase):
 
     def test_reported_heldout_summaries(self):
         rows = read_csv(SUMMARY_ROOT / "heldout_family_summary.csv")
+        self.assertTrue(rows)
+        self.assertEqual({row["method"] for row in rows}, {"heldout80"})
         selected = {
             row["family"]: row
             for row in rows
@@ -210,6 +218,18 @@ class ReleaseConfigurationTests(unittest.TestCase):
         self.assertTrue(
             all(float(row["ci95_high_pct"]) < 0.0 for row in selected.values())
         )
+
+    def test_resolved_prior_configuration_is_packaged(self):
+        text = PRIOR_CONFIG_PATH.read_text(encoding="utf-8")
+        self.assertIn("_target_: igra_gen.models.songunet.SongUNet", text)
+        self.assertIn("model_channels: 64", text)
+        self.assertIn("2m_temperature", text)
+        self.assertIn("specific_humidity_850", text)
+
+    def test_training_pipeline_is_not_packaged(self):
+        self.assertFalse((REPO_ROOT / "src/igra_gen/train.py").exists())
+        self.assertFalse((REPO_ROOT / "src/igra_gen/training").exists())
+        self.assertFalse((REPO_ROOT / "src/igra_gen/configs/train.yaml").exists())
 
     def test_composition_summary_schema_and_reported_values(self):
         rows = read_csv(SUMMARY_ROOT / "composition_summary.csv")
@@ -244,10 +264,7 @@ class ReleaseConfigurationTests(unittest.TestCase):
 
     def test_removed_ttest_table_is_not_packaged(self):
         self.assertFalse(
-            (
-                REPO_ROOT
-                / "analysis/manuscript_tables/frozen2019_full723_paired_ttests.tex"
-            ).exists()
+            list((REPO_ROOT / "analysis/manuscript_tables").glob("*paired_ttest*"))
         )
 
 

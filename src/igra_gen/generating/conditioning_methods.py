@@ -31,11 +31,8 @@ class ConditioningMethod:
                      std_sr=1e-1, gamma_sr=5e-3, std_igra=5e-4, gamma_igra=2e-6,
                      std_aircraft=5e-4, gamma_aircraft=2e-6,
                      std_surface=5e-4, gamma_surface=2e-6,
-                     std_aircraft_acars=None, gamma_aircraft_acars=None,
-                     std_aircraft_profiles=None, gamma_aircraft_profiles=None,
                      lambda_igra=1.0, lambda_aircraft=1.0,
                      lambda_surface=1.0,
-                     lambda_aircraft_acars=None, lambda_aircraft_profiles=None,
                      mu=1, beta=1, lda=0.25, retain_graph=False, **kwargs):
         """
         Unified conditioning method that handles SR, IGRA, and SR+IGRA based on measurement type.
@@ -58,7 +55,7 @@ class ConditioningMethod:
             # For SR+IGRA case, convert tensor part to device
             if torch.is_tensor(measurement[0]):
                 measurement[0] = measurement[0].to(device)
-            # IGRA part stays as lists (converted to tensors internally in error_function)
+            # Sparse observation lists are converted to tensors by error_function.
 
         # Source-specific observations:
         # {
@@ -66,23 +63,14 @@ class ConditioningMethod:
         #   "aircraft": {"kind": "multi_grid", ...},
         #   "surface": {"kind": "multi_grid", ...},
         # }
-        # Each modality gets its own variance and lambda weight.  Empty
-        # channels are skipped in sparse_error_function, so dense products do
-        # not inherit the old IGRA empty-channel denominator.
+        # Each source gets its own variance and lambda weight. Empty channels
+        # are omitted from the residual average.
         if isinstance(measurement, dict):
-            std_aircraft_acars = std_aircraft if std_aircraft_acars is None else std_aircraft_acars
-            gamma_aircraft_acars = gamma_aircraft if gamma_aircraft_acars is None else gamma_aircraft_acars
-            lambda_aircraft_acars = lambda_aircraft if lambda_aircraft_acars is None else lambda_aircraft_acars
-            std_aircraft_profiles = std_aircraft if std_aircraft_profiles is None else std_aircraft_profiles
-            gamma_aircraft_profiles = gamma_aircraft if gamma_aircraft_profiles is None else gamma_aircraft_profiles
-            lambda_aircraft_profiles = lambda_aircraft if lambda_aircraft_profiles is None else lambda_aircraft_profiles
             specs = {
                 "igra": (std_igra, gamma_igra, lambda_igra),
                 "aircraft": (std_aircraft, gamma_aircraft, lambda_aircraft),
                 "surface": (std_surface, gamma_surface, lambda_surface),
                 "metar": (std_surface, gamma_surface, lambda_surface),
-                "aircraft_acars": (std_aircraft_acars, gamma_aircraft_acars, lambda_aircraft_acars),
-                "aircraft_profiles": (std_aircraft_profiles, gamma_aircraft_profiles, lambda_aircraft_profiles),
             }
             log_p = torch.zeros((), device=device, dtype=x_0_hat.dtype)
             err_items = {}
@@ -277,8 +265,8 @@ class IGRAOperator:
         Sparse point-observation MSE that skips empty channels.
 
         This is intended for modality-specific posterior likelihoods.  It keeps
-        the same point interpolation H as error_function, but avoids the legacy
-        empty-channel denominator behavior.
+        the same point interpolation H as error_function, while skipping empty
+        channels in the denominator.
         """
         error = torch.zeros((), device=data.device, dtype=torch.float32)
         counter = 0
@@ -411,44 +399,18 @@ class UnifiedOperator:
         if conditioning_type in ["sr", "sr_igra"]:
             self.sr_op = SuperResolutionOperator(in_shape=in_shape, target_shape=target_shape, mode=mode)
         if conditioning_type in ["igra", "sr_igra", "multimodal"]:
-            # Explicit grid paths are part of the run configuration.  If the
-            # caller supplies either path, fail on that pair instead of
-            # silently switching to a process-level environment setting.
-            if lat_path is not None or lon_path is not None:
+            try:
                 self.igra_op = IGRAOperator(
                     lat_path=lat_path, lon_path=lon_path, mode=mode
                 )
-            else:
-                try:
-                    self.igra_op = IGRAOperator(
-                        lat_path=lat_path, lon_path=lon_path, mode=mode
-                    )
-                except FileNotFoundError:
-                    print(
-                        "Warning: Could not load lat/lon files from "
-                        f"{lat_path}, {lon_path}"
-                    )
-                    # Retain the environment-based fallback for historical
-                    # callers that do not use the public reproduction wrappers.
-                    alt_lat_path = _ERA5_LAT_PATH
-                    alt_lon_path = _ERA5_LON_PATH
-                    try:
-                        self.igra_op = IGRAOperator(
-                            lat_path=alt_lat_path,
-                            lon_path=alt_lon_path,
-                            mode=mode,
-                        )
-                        print(
-                            "Loaded lat/lon from alternative paths: "
-                            f"{alt_lat_path}, {alt_lon_path}"
-                        )
-                    except FileNotFoundError:
-                        raise FileNotFoundError(
-                            "Could not load IGRA lat/lon grid from "
-                            f"{lat_path}, {lon_path} or fallback "
-                            f"{alt_lat_path}, {alt_lon_path}. "
-                            "Set IGRA_ERA5_GRID_ROOT or pass lat_path/lon_path."
-                        )
+            except FileNotFoundError as exc:
+                requested_lat = _ERA5_LAT_PATH if lat_path is None else lat_path
+                requested_lon = _ERA5_LON_PATH if lon_path is None else lon_path
+                raise FileNotFoundError(
+                    "Could not load the ERA5 latitude/longitude grid from "
+                    f"{requested_lat} and {requested_lon}. Pass lat_path and "
+                    "lon_path explicitly, or set IGRA_ERA5_GRID_ROOT."
+                ) from exc
 
     def forward(self, data):
         """SR forward operation"""

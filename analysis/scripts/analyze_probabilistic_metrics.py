@@ -5,8 +5,6 @@ import json
 import os
 from pathlib import Path
 
-os.environ.setdefault("MPLCONFIGDIR", "/home/xu2279/.tmp/matplotlib")
-
 import h5py
 import matplotlib
 
@@ -16,21 +14,13 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 
+from analysis_paths import output_path, required_path
 
-ROOT = Path("/depot/rmaulik/data/yangxu")
-ERA5_ROOT = ROOT / "data_from_DJ_original_NERSC/1.40625deg_from_full_res_1_step_6hr_h5df"
-TIMESTEP_MANIFEST = (
-    ROOT
-    / "runs/multimodal_madis_13var/20260701__final_protocol_igra_abo_metar_fullyear_2020_2gpu"
-    / "timesteps_full_matched_723.json"
-)
-R_ROOT = ROOT / "runs/goes_13var_3method_grid_protocol_723x12h_20260606/igra_only/samples/igra_only"
-RAS_ROOT = (
-    ROOT
-    / "runs/observation_interface_independent_year_2019/20260726__RplusAplusS_2019_frozen_fullyear_2020_4gpu"
-    / "protocols/RplusAplusS_2019_frozen_strict_conus/samples/RplusAplusS_2019_frozen_strict_conus"
-)
-OUT = ROOT / "reports/2026/07312026report/20260731__frozen2019_full723_probabilistic_diagnostics"
+ERA5_ROOT = required_path("ERA5_ROOT")
+TIMESTEP_MANIFEST = required_path("EVALUATION_TIMESTEP_MANIFEST")
+R_ROOT = required_path("R_ONLY_SAMPLES_ROOT")
+RAS_ROOT = required_path("RAS_SAMPLES_ROOT")
+OUT = output_path("PROBABILISTIC_ANALYSIS_OUTPUT_ROOT", "probabilistic_metrics")
 TABLES = OUT / "tables"
 FIGURES = OUT / "figures"
 
@@ -74,15 +64,15 @@ AIRCRAFT = {
     "v_component_of_wind_850",
 }
 PROTOCOLS = {
-    "R": (R_ROOT, "igra_only"),
-    "R+A+S": (RAS_ROOT, "RplusAplusS_2019_frozen_strict_conus"),
+    "R": R_ROOT,
+    "R+A+S": RAS_ROOT,
 }
 COLORS = {"R": "#2B6EA6", "R+A+S": "#1B8E72"}
 
 
 def load_timesteps() -> list[int]:
     payload = json.loads(TIMESTEP_MANIFEST.read_text())
-    timesteps = [int(x) for x in payload["matched_timesteps"]]
+    timesteps = [int(x) for x in payload["timesteps"]]
     if len(timesteps) != 723 or len(set(timesteps)) != 723:
         raise ValueError(f"Expected 723 unique timesteps, found {len(timesteps)}")
     return timesteps
@@ -114,8 +104,12 @@ def masks() -> dict[str, np.ndarray]:
 
 
 def sample_path(protocol: str, timestep: int) -> Path:
-    root, tag = PROTOCOLS[protocol]
-    return root / f"{tag}_t{timestep:04d}_e16_s50.npy"
+    matches = sorted(PROTOCOLS[protocol].glob(f"*_t{timestep:04d}_e16_s50.npy"))
+    if len(matches) != 1:
+        raise FileNotFoundError(
+            f"Expected one {protocol} sample file for timestep {timestep}, found {len(matches)}"
+        )
+    return matches[0]
 
 
 def members_physical(protocol: str, timestep: int, mean: np.ndarray, std: np.ndarray) -> np.ndarray:
@@ -267,22 +261,22 @@ def plot_summary(summary: pd.DataFrame) -> None:
     axes[2].set_title("Spread-error association")
     axes[2].legend(frameon=True, fontsize=9)
 
-    figure.suptitle("2019-frozen protocol: full-year 2020 probabilistic diagnostics within CONUS", fontweight="bold")
-    figure.savefig(FIGURES / "frozen2019_full723_probabilistic_summary.png", dpi=300)
-    figure.savefig(FIGURES / "frozen2019_full723_probabilistic_summary.pdf")
+    figure.suptitle("R+A+S selected with 2019 data: full-year 2020 probabilistic diagnostics within CONUS", fontweight="bold")
+    figure.savefig(FIGURES / "probabilistic_summary_2020.png", dpi=300)
+    figure.savefig(FIGURES / "probabilistic_summary_2020.pdf")
     plt.close(figure)
 
 
 def write_readme(summary: pd.DataFrame) -> None:
     strict = summary[summary["region"].eq("strict_conus")].set_index("evaluation_group")
     lines = [
-        "# Frozen-2019 Full-723 Probabilistic Diagnostics",
+        "# Full-Year 2020 Probabilistic Diagnostics",
         "",
-        "This report compares the 16-member R-only ensemble with the 16-member 2019-frozen R+A+S ensemble over all 723 baseline-matched 2020 cases.",
+        "This report compares the 16-member R-only ensemble with the 16-member R+A+S ensemble selected using 2019 data over all 723 matched 2020 cases.",
         "",
         "## Evidence boundary",
         "",
-        "- No GPU sampling is rerun; this is a CPU re-analysis of the frozen-protocol arrays.",
+        "- No GPU sampling is rerun; this is a CPU analysis of the selected-interface arrays.",
         "- All paired changes are formed within timestep and variable before equal-variable averaging.",
         "- Standard empirical CRPS is the manuscript metric. Fair CRPS is included as a fixed-ensemble-size sensitivity check.",
         "- Coverage is diagnostic for the interpolated 5th-95th percentiles of 16 members, not a claim of exact 90% posterior calibration.",
@@ -311,8 +305,8 @@ def write_readme(summary: pd.DataFrame) -> None:
             "",
             f"- Per-entry metrics: `{TABLES / 'metrics_by_timestep_variable_region_protocol.csv'}`",
             f"- Paired entries: `{TABLES / 'paired_metrics_by_timestep_variable_region.csv'}`",
-            f"- Group summary: `{TABLES / 'paired_group_summary.csv'}`",
-            f"- Figure: `{FIGURES / 'frozen2019_full723_probabilistic_summary.png'}`",
+            f"- Group summary: `{TABLES / 'probabilistic_group_summary.csv'}`",
+            f"- Figure: `{FIGURES / 'probabilistic_summary_2020.png'}`",
         ]
     )
     (OUT / "README.md").write_text("\n".join(lines) + "\n", encoding="utf-8")
@@ -325,7 +319,7 @@ def main() -> None:
     paired, summary = paired_tables(metrics)
     metrics.to_csv(TABLES / "metrics_by_timestep_variable_region_protocol.csv", index=False)
     paired.to_csv(TABLES / "paired_metrics_by_timestep_variable_region.csv", index=False)
-    summary.to_csv(TABLES / "paired_group_summary.csv", index=False)
+    summary.to_csv(TABLES / "probabilistic_group_summary.csv", index=False)
     plot_summary(summary)
     write_readme(summary)
     manifest = {
@@ -334,7 +328,7 @@ def main() -> None:
         "n_timesteps": int(metrics["timestep"].nunique()),
         "ensemble_members": 16,
         "steps": 50,
-        "protocol_roots": {name: str(root) for name, (root, _) in PROTOCOLS.items()},
+        "protocol_roots": {name: str(root) for name, root in PROTOCOLS.items()},
         "outputs": {"tables": str(TABLES), "figures": str(FIGURES)},
     }
     (OUT / "manifest.json").write_text(json.dumps(manifest, indent=2) + "\n", encoding="utf-8")

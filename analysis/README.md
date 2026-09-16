@@ -10,8 +10,8 @@ posterior sample arrays described in `../DATA.md`.
 - `scripts/`: final annual, held-out-observation, probabilistic, dispersion,
   composition, spatial, and plotting analyses.
 - `summary_tables/`: compact CSV outputs underlying the principal numerical
-  claims in manuscript V172.
-- `manuscript_tables/`: the LaTeX tables included by manuscript V172.
+  claims in the manuscript.
+- `manuscript_tables/`: the LaTeX tables included by the manuscript.
 
 ## Claim-to-artifact map
 
@@ -28,11 +28,26 @@ posterior sample arrays described in `../DATA.md`.
 
 The numerical summaries are small enough to distribute directly. Recomputing
 them from scratch requires the external ERA5 files, observation products,
-normalization files, checkpoint, and posterior samples. The analysis scripts
-preserve the paths used for the study as provenance; users working elsewhere
-must point those constants to their local copies of the required inputs.
+normalization files, checkpoint, and posterior samples. Analysis inputs are
+supplied through the environment variables named in each script, and generated
+outputs default to `analysis/generated/` unless an output variable is set.
 
-The public statistical inference follows the manuscript: paired
-analysis-time RMSE or CRPS changes are summarized with moving-block bootstrap
-intervals. Earlier paired t-test outputs were intentionally removed from the
-release copy because they are not part of the final manuscript evidence.
+For example, the annual R+A+S analysis expects directories containing the
+ERA5 fields, R-only samples, and R+A+S samples, together with the evaluation
+manifest:
+
+```bash
+ERA5_ROOT=/path/to/era5 \
+R_ONLY_SAMPLES_ROOT=/path/to/r_only/samples \
+RAS_SAMPLES_ROOT=/path/to/ras/samples \
+EVALUATION_TIMESTEP_MANIFEST=reproduction/manifests/evaluation_timesteps_2020.json \
+python analysis/scripts/analyze_annual_rmse.py
+```
+
+Each standalone script names any additional required environment variable in
+its startup error. Scripts with a command-line interface, such as
+`analyze_composition.py` and `plot_observation_geometry.py`, list their inputs
+under `--help`.
+
+The statistical inference follows the manuscript: paired analysis-time RMSE
+or CRPS changes are summarized with moving-block bootstrap intervals.

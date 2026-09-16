@@ -1,17 +1,15 @@
-"""Shared definitions for independent-year observation-interface development."""
+"""Shared time and domain utilities for observation preprocessing."""
 
 from __future__ import annotations
 
 from datetime import datetime
-from pathlib import Path
 
 
-ROOT = Path("/depot/rmaulik/data/yangxu")
 STRICT_CONUS = (24.0, 50.0, -125.0, -66.0)
 
 
-def stratified24(year: int) -> list[datetime]:
-    """Return the prespecified 00 UTC cases on the 1st and 15th."""
+def seasonally_distributed_24_times(year: int) -> list[datetime]:
+    """Return 00 UTC on the 1st and 15th of each month."""
     return [
         datetime(year, month, day, 0)
         for month in range(1, 13)
