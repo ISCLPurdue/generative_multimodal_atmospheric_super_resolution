@@ -3,7 +3,7 @@ set -euo pipefail
 
 if [[ $# -lt 3 ]]; then
   echo "Usage: $0 OUT_ROOT YYYY-MM-DD[,YYYY-MM-DD...] HH[,HH...]"
-  echo "Example: $0 /depot/.../aircraft_madis_abo_raw 2020-01-01,2020-01-02 00,12"
+  echo "Example: $0 /path/to/aircraft_madis_abo_raw 2020-01-01,2020-01-02 00,12"
   exit 2
 fi
 
@@ -41,6 +41,5 @@ download_one() {
 for date in "${DATES[@]}"; do
   for hour in "${HOURS[@]}"; do
     download_one "acars" "${date}" "${hour}"
-    download_one "acarsProfiles" "${date}" "${hour}"
   done
 done

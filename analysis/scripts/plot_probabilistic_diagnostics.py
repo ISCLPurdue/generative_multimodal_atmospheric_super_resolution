@@ -4,8 +4,6 @@ from __future__ import annotations
 import os
 from pathlib import Path
 
-os.environ.setdefault("MPLCONFIGDIR", "/home/xu2279/.tmp/matplotlib")
-
 import matplotlib
 
 matplotlib.use("Agg")
@@ -13,18 +11,10 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 
+from analysis_paths import required_path
 
-ROOT = Path("/depot/rmaulik/data/yangxu")
-PROBABILISTIC_TABLES = (
-    ROOT
-    / "reports/2026/07312026report"
-    / "20260731__frozen2019_full723_probabilistic_diagnostics/tables"
-)
-DISPERSION_TABLES = (
-    ROOT
-    / "reports/2026/08012026report"
-    / "20260801__frozen2019_full723_spread_skill_rank_histogram/tables"
-)
+PROBABILISTIC_TABLES = required_path("PROBABILISTIC_TABLE_ROOT")
+DISPERSION_TABLES = required_path("DISPERSION_TABLE_ROOT")
 FIGURES = Path(__file__).resolve().parents[1] / "figures"
 
 GROUP_ORDER = [
@@ -65,7 +55,7 @@ def save(figure: plt.Figure, stem: str) -> None:
 
 
 def plot_probabilistic_summary() -> None:
-    summary = pd.read_csv(PROBABILISTIC_TABLES / "paired_group_summary.csv")
+    summary = pd.read_csv(PROBABILISTIC_TABLES / "probabilistic_group_summary.csv")
     strict = summary[summary["region"].eq("strict_conus")].set_index(
         "evaluation_group"
     )
@@ -122,14 +112,14 @@ def plot_probabilistic_summary() -> None:
     axes[1].set_title("(b) Finite-ensemble coverage")
     axes[1].legend(frameon=True, fontsize=8)
 
-    save(figure, "probabilistic_diagnostics_conus_v148")
+    save(figure, "probabilistic_diagnostics_conus")
 
 
 def plot_dispersion_summary() -> None:
     spread = pd.read_csv(
-        DISPERSION_TABLES / "spread_skill_ratio_by_group_protocol.csv"
+        DISPERSION_TABLES / "spread_skill_by_group.csv"
     )
-    ranks = pd.read_csv(DISPERSION_TABLES / "rank_histogram_by_group_protocol.csv")
+    ranks = pd.read_csv(DISPERSION_TABLES / "rank_histogram_by_group.csv")
     labels = [GROUP_LABELS[group] for group in GROUP_ORDER]
     x = np.arange(len(GROUP_ORDER))
     width = 0.34
@@ -197,15 +187,15 @@ def plot_dispersion_summary() -> None:
     axes[1].set_axisbelow(True)
     axes[1].legend(frameon=True, facecolor="white", edgecolor="#C7CDD3")
 
-    save(figure, "ensemble_dispersion_diagnostics_conus_v148")
+    save(figure, "ensemble_dispersion_diagnostics_conus")
 
 
 def main() -> None:
     configure_plotting()
     plot_probabilistic_summary()
     plot_dispersion_summary()
-    print(FIGURES / "probabilistic_diagnostics_conus_v148.pdf")
-    print(FIGURES / "ensemble_dispersion_diagnostics_conus_v148.pdf")
+    print(FIGURES / "probabilistic_diagnostics_conus.pdf")
+    print(FIGURES / "ensemble_dispersion_diagnostics_conus.pdf")
 
 
 if __name__ == "__main__":

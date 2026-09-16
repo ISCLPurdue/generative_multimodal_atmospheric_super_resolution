@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
-"""Build DJ-compatible 13-channel IGRA observations from NOAA IGRA v2 raw files.
+"""Build 13-channel IGRA observations from NOAA IGRA v2 raw files.
 
-The output follows the nested pickle layout used by DJ's ``igra_2020_all.pkl``:
+The output follows the nested pickle layout expected by the paper sampler:
 ``all_times[t] == [[query_locations_by_channel], [values_by_channel]]``.
 Only requested nominal sounding times are populated; the remaining six-hourly
 slots are empty so the timestep index stays aligned with the ERA5 year split.
@@ -23,7 +23,10 @@ from typing import Iterable
 
 import numpy as np
 
-from independent_year_common import ROOT, six_hour_index, stratified24
+from observation_preprocessing_common import (
+    seasonally_distributed_24_times,
+    six_hour_index,
+)
 
 
 VARIABLES = [
@@ -188,7 +191,8 @@ def main() -> None:
     parser.add_argument(
         "--normalization_root",
         type=Path,
-        default=ROOT / "data_from_DJ_original_NERSC/1.40625deg_from_full_res_1_step_6hr_h5df",
+        required=True,
+        help="ERA5 directory containing normalize_mean.npz and normalize_std.npz.",
     )
     parser.add_argument("--output_pkl", type=Path, required=True)
     parser.add_argument("--audit_csv", type=Path, required=True)
@@ -202,7 +206,7 @@ def main() -> None:
             for i in range(_year_length(args.year) // 2)
         }
     else:
-        targets = set(stratified24(args.year))
+        targets = set(seasonally_distributed_24_times(args.year))
 
     means_npz = np.load(args.normalization_root / "normalize_mean.npz")
     stds_npz = np.load(args.normalization_root / "normalize_std.npz")

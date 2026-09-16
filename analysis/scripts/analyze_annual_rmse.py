@@ -15,28 +15,13 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 
+from analysis_paths import output_path, required_path
 
-ROOT = Path("/depot/rmaulik/data/yangxu")
-ERA5_ROOT = ROOT / "data_from_DJ_original_NERSC/1.40625deg_from_full_res_1_step_6hr_h5df"
-BASELINE_ROOT = (
-    ROOT
-    / "runs/goes_13var_3method_grid_protocol_723x12h_20260606/igra_only/samples/igra_only"
-)
-RUN_ROOT = (
-    ROOT
-    / "runs/observation_interface_independent_year_2019"
-    / "20260726__RplusAplusS_2019_frozen_fullyear_2020_4gpu"
-)
-TIMESTEP_MANIFEST = (
-    ROOT
-    / "runs/multimodal_madis_13var/20260701__final_protocol_igra_abo_metar_fullyear_2020_2gpu"
-    / "timesteps_full_matched_723.json"
-)
-OUT_DIR = (
-    ROOT
-    / "reports/2026/07262026report"
-    / "20260726__frozen2019_RAS_fullyear2020_analysis"
-)
+ERA5_ROOT = required_path("ERA5_ROOT")
+BASELINE_ROOT = required_path("R_ONLY_SAMPLES_ROOT")
+RAS_SAMPLES_ROOT = required_path("RAS_SAMPLES_ROOT")
+TIMESTEP_MANIFEST = required_path("EVALUATION_TIMESTEP_MANIFEST")
+OUT_DIR = output_path("ANNUAL_RMSE_OUTPUT_ROOT", "annual_rmse")
 TABLE_DIR = OUT_DIR / "tables"
 FIG_DIR = OUT_DIR / "figures"
 
@@ -109,8 +94,7 @@ TIMESTEP_RE = re.compile(r"_t(\d{4})_e16_s50\.npy$")
 @dataclass(frozen=True)
 class Protocol:
     label: str
-    path: Path
-    sample_tag: str
+    sample_dir: Path
     display: str
     group: str
     lambda_aircraft: float | None
@@ -123,10 +107,9 @@ class Protocol:
 
 PROTOCOLS = [
     Protocol(
-        label="RplusAplusS_2019_frozen",
-        path=RUN_ROOT / "protocols/RplusAplusS_2019_frozen_strict_conus",
-        sample_tag="RplusAplusS_2019_frozen_strict_conus",
-        display="R+A+S (2019-frozen)",
+        label="RplusAplusS_selected_2019",
+        sample_dir=RAS_SAMPLES_ROOT,
+        display="R+A+S (selected with 2019 data)",
         group="R+A+S",
         lambda_aircraft=0.4,
         std_aircraft=5e-4,
@@ -145,7 +128,7 @@ def ensure_dirs() -> None:
 
 def load_timesteps() -> list[int]:
     payload = json.loads(TIMESTEP_MANIFEST.read_text())
-    timesteps = [int(t) for t in payload["matched_timesteps"]]
+    timesteps = [int(t) for t in payload["timesteps"]]
     if len(timesteps) != 723:
         raise RuntimeError(f"Expected 723 matched timesteps, got {len(timesteps)}")
     return timesteps
@@ -198,13 +181,21 @@ def datetime_utc(timestep: int) -> pd.Timestamp:
 
 
 def sample_paths(protocol: Protocol) -> dict[int, Path]:
-    sample_dir = protocol.path / "samples" / protocol.sample_tag
     paths = {}
-    for p in sorted(sample_dir.glob("*.npy")):
+    for p in sorted(protocol.sample_dir.glob("*.npy")):
         match = TIMESTEP_RE.search(p.name)
         if match:
             paths[int(match.group(1))] = p
     return paths
+
+
+def sample_path(root: Path, timestep: int) -> Path:
+    matches = sorted(root.glob(f"*_t{timestep:04d}_e16_s50.npy"))
+    if len(matches) != 1:
+        raise FileNotFoundError(
+            f"Expected one sample file for timestep {timestep} in {root}, found {len(matches)}"
+        )
+    return matches[0]
 
 
 def evaluate() -> tuple[pd.DataFrame, pd.DataFrame, dict]:
@@ -224,9 +215,7 @@ def evaluate() -> tuple[pd.DataFrame, pd.DataFrame, dict]:
         if idx == 1 or idx % 50 == 0 or idx == len(timesteps):
             print(f"[{idx:03d}/{len(timesteps)}] t{timestep:04d}", flush=True)
         truth = load_truth(timestep)
-        baseline_path = BASELINE_ROOT / f"igra_only_t{timestep:04d}_e16_s50.npy"
-        if not baseline_path.exists():
-            raise FileNotFoundError(baseline_path)
+        baseline_path = sample_path(BASELINE_ROOT, timestep)
         baseline = load_sample_mean(baseline_path, mean, std)
         baseline_rmse = {region: rmse(baseline, truth, mask) for region, mask in masks.items()}
         dt = datetime_utc(timestep)
@@ -247,7 +236,7 @@ def evaluate() -> tuple[pd.DataFrame, pd.DataFrame, dict]:
                         "lambda_surface": protocol.lambda_surface,
                         "std_surface": protocol.std_surface,
                         "gamma_surface": protocol.gamma_surface,
-                        "sample_tag": protocol.sample_tag,
+                        "sample_directory": str(protocol.sample_dir),
                         "timestep": timestep,
                         "datetime_utc": dt.strftime("%Y-%m-%dT%H:%M:%SZ"),
                         "month": int(dt.month),
@@ -266,7 +255,7 @@ def evaluate() -> tuple[pd.DataFrame, pd.DataFrame, dict]:
     keys = [
         "region", "protocol", "display", "group",
         "lambda_aircraft", "std_aircraft", "gamma_aircraft",
-        "lambda_surface", "std_surface", "gamma_surface", "sample_tag",
+        "lambda_surface", "std_surface", "gamma_surface", "sample_directory",
     ]
     summary = (
         df.groupby(keys, as_index=False, dropna=False)
@@ -297,7 +286,7 @@ def evaluate() -> tuple[pd.DataFrame, pd.DataFrame, dict]:
     )
     summary = summary.merge(surface, how="left").merge(constrained, how="left")
     meta = {
-        "run_root": str(RUN_ROOT),
+        "ras_samples_root": str(RAS_SAMPLES_ROOT),
         "baseline_root": str(BASELINE_ROOT),
         "era5_root": str(ERA5_ROOT),
         "timestep_manifest": str(TIMESTEP_MANIFEST),
@@ -348,18 +337,18 @@ def write_result_tables(df: pd.DataFrame) -> dict[str, Path]:
             "improved_timestep_frac": float(np.mean(g["rmse_change_pct_vs_R"].to_numpy() < 0.0)),
         })
     per_var = pd.DataFrame(per_var_rows)
-    out = TABLE_DIR / "final_fullyear_per_variable_summary.csv"
+    out = TABLE_DIR / "full_year_per_variable_summary.csv"
     per_var.to_csv(out, index=False)
     outputs["per_variable_summary"] = out
 
-    final = per_var[per_var["protocol"].eq("RplusAplusS_2019_frozen")].copy()
+    final = per_var[per_var["protocol"].eq("RplusAplusS_selected_2019")].copy()
     for region in ["strict_conus", "global", "global_excluding_strict_conus"]:
         region_df = final[final["region"].eq(region)].copy()
         region_df["sort_key"] = region_df["mean_rmse_change_pct"]
         region_df = region_df.sort_values("sort_key")
-        out = TABLE_DIR / f"frozen2019_RAS_result_table_{region}.csv"
+        out = TABLE_DIR / f"selected_RAS_result_table_{region}.csv"
         region_df.drop(columns=["sort_key"]).to_csv(out, index=False)
-        outputs[f"frozen2019_RAS_result_table_{region}"] = out
+        outputs[f"selected_RAS_result_table_{region}"] = out
 
     monthly_rows = []
     for var_set in ["all13", "surface3", "aircraft6"]:
@@ -376,7 +365,7 @@ def write_result_tables(df: pd.DataFrame) -> dict[str, Path]:
         monthly["var_set"] = var_set
         monthly_rows.append(monthly)
     monthly_all = pd.concat(monthly_rows, ignore_index=True)
-    out = TABLE_DIR / "final_fullyear_monthly_summary.csv"
+    out = TABLE_DIR / "full_year_monthly_summary.csv"
     monthly_all.to_csv(out, index=False)
     outputs["monthly_summary"] = out
 
@@ -420,7 +409,7 @@ def plot_region_summary(summary: pd.DataFrame, out: Path) -> None:
         "IGRA + ABO(A1)": "#4c78a8",
         "IGRA + METAR(M5)": "#59a14f",
         "IGRA + ABO(A1) + METAR(M5)": "#9c755f",
-        "R+A+S (2019-frozen)": "#6f4aa8",
+        "R+A+S (selected with 2019 data)": "#6f4aa8",
     }
     for ax, region in zip(axes, regions):
         sub = summary[summary["region"].eq(region)].copy()
@@ -439,7 +428,7 @@ def plot_region_summary(summary: pd.DataFrame, out: Path) -> None:
         ax.grid(axis="y", alpha=0.25)
     axes[0].set_ylabel("Mean paired RMSE change vs R-only (%)")
     axes[-1].legend(loc="lower right", fontsize=8)
-    fig.suptitle("Full-year 2020 2019-frozen protocol by region", weight="bold", fontsize=15)
+    fig.suptitle("Full-year 2020 selected interface by region", weight="bold", fontsize=15)
     fig.savefig(out, dpi=240)
     plt.close(fig)
 
@@ -496,7 +485,7 @@ def plot_protocol_table(region_table: pd.DataFrame, region: str, out: Path) -> N
 
     fig, ax = plt.subplots(figsize=(12.8, 7.2), constrained_layout=True)
     ax.axis("off")
-    ax.set_title(f"Full-year 2020 result: {region}\nR+A+S protocol frozen from 2019", fontsize=16, weight="bold", pad=14)
+    ax.set_title(f"Full-year 2020 result: {region}\nR+A+S interface selected with 2019 data", fontsize=16, weight="bold", pad=14)
     tbl = ax.table(cellText=table.values, colLabels=table.columns, loc="center", cellLoc="left", colLoc="left")
     tbl.auto_set_font_size(False)
     tbl.set_fontsize(9.4)
@@ -522,15 +511,15 @@ def plot_protocol_table(region_table: pd.DataFrame, region: str, out: Path) -> N
 
 def make_figures(df: pd.DataFrame, summary: pd.DataFrame, per_var: pd.DataFrame) -> None:
     for region in ["strict_conus", "global", "global_excluding_strict_conus"]:
-        plot_metric_matrix(summary, region, FIG_DIR / f"final_fullyear_metric_matrix_{region}.png")
-        plot_per_variable(df, region, FIG_DIR / f"final_fullyear_per_variable_pct_delta_{region}.png")
+        plot_metric_matrix(summary, region, FIG_DIR / f"full_year_metric_matrix_{region}.png")
+        plot_per_variable(df, region, FIG_DIR / f"full_year_per_variable_pct_delta_{region}.png")
         for var_set in ["all13", "surface3", "aircraft6"]:
-            plot_monthly_trajectory(df, var_set, region, FIG_DIR / f"final_fullyear_monthly_{var_set}_{region}.png")
+            plot_monthly_trajectory(df, var_set, region, FIG_DIR / f"full_year_monthly_{var_set}_{region}.png")
         final_table = per_var[
-            per_var["protocol"].eq("RplusAplusS_2019_frozen") & per_var["region"].eq(region)
+            per_var["protocol"].eq("RplusAplusS_selected_2019") & per_var["region"].eq(region)
         ].sort_values("mean_rmse_change_pct")
-        plot_protocol_table(final_table, region, FIG_DIR / f"frozen2019_RAS_result_table_{region}.png")
-    plot_region_summary(summary, FIG_DIR / "final_fullyear_region_summary_bars.png")
+        plot_protocol_table(final_table, region, FIG_DIR / f"selected_RAS_result_table_{region}.png")
+    plot_region_summary(summary, FIG_DIR / "full_year_region_summary_bars.png")
 
 
 def write_readme(summary: pd.DataFrame, per_var: pd.DataFrame, meta: dict, outputs: dict[str, Path]) -> None:
@@ -544,7 +533,7 @@ def write_readme(summary: pd.DataFrame, per_var: pd.DataFrame, meta: dict, outpu
 
     regions = ["strict_conus", "global", "global_excluding_strict_conus"]
     lines = [
-        "# 2019-Frozen R+A+S Full-Year 2020 Analysis",
+        "# R+A+S Full-Year 2020 Analysis",
         "",
         f"Generated: {pd.Timestamp.utcnow().strftime('%Y-%m-%dT%H:%M:%SZ')}",
         "",
@@ -554,7 +543,7 @@ def write_readme(summary: pd.DataFrame, per_var: pd.DataFrame, meta: dict, outpu
         "",
         "## Inputs",
         "",
-        f"- Run root: `{RUN_ROOT}`",
+        f"- R+A+S sample directory: `{RAS_SAMPLES_ROOT}`",
         f"- R-only baseline: `{BASELINE_ROOT}`",
         f"- ERA5 diagnostic truth: `{ERA5_ROOT}`",
         f"- Timestep manifest: `{TIMESTEP_MANIFEST}`",
@@ -562,7 +551,7 @@ def write_readme(summary: pd.DataFrame, per_var: pd.DataFrame, meta: dict, outpu
         "",
         "## Protocol",
         "",
-        "- `R+A+S (2019-frozen)`: radiosonde/profile anchor plus MADIS point/acars aircraft and MADIS METAR surface-station equal-cell interfaces.",
+        "- `R+A+S (selected with 2019 data)`: radiosonde/profile anchor plus MADIS point/acars aircraft and MADIS METAR surface-station equal-cell interfaces.",
         "- Aircraft parameters: lambda=0.4, std=5e-4, gamma=2e-5.",
         "- Surface-station parameters: lambda=0.4, std=1.25e-4, gamma=4e-5.",
         "- Source policy: keep MADIS aircraft dataSource {0,1,5}; exclude TAMDAR.",
@@ -576,9 +565,9 @@ def write_readme(summary: pd.DataFrame, per_var: pd.DataFrame, meta: dict, outpu
             lines.append(line_for(region, protocol))
         lines.append("")
 
-    frozen = summary[summary["protocol"].eq("RplusAplusS_2019_frozen")]
-    strict = frozen[frozen["region"].eq("strict_conus")].iloc[0]
-    rest = frozen[frozen["region"].eq("global_excluding_strict_conus")].iloc[0]
+    selected = summary[summary["protocol"].eq("RplusAplusS_selected_2019")]
+    strict = selected[selected["region"].eq("strict_conus")].iloc[0]
+    rest = selected[selected["region"].eq("global_excluding_strict_conus")].iloc[0]
     lines.extend([
         "## Interpretation",
         "",
@@ -587,8 +576,8 @@ def write_readme(summary: pd.DataFrame, per_var: pd.DataFrame, meta: dict, outpu
         "",
         "## Outputs",
         "",
-        f"- Metrics by timestep/variable: `{TABLE_DIR / 'frozen2019_RAS_metrics_by_timestep_variable.csv'}`",
-        f"- Summary by protocol/region: `{TABLE_DIR / 'frozen2019_RAS_summary_by_protocol_region.csv'}`",
+        f"- Metrics by timestep/variable: `{TABLE_DIR / 'selected_RAS_metrics_by_timestep_variable.csv'}`",
+        f"- Summary by protocol/region: `{TABLE_DIR / 'selected_RAS_summary_by_protocol_region.csv'}`",
         f"- Per-variable summary: `{outputs['per_variable_summary']}`",
         f"- Monthly summary: `{outputs['monthly_summary']}`",
         f"- Figures: `{FIG_DIR}`",
@@ -607,8 +596,8 @@ def main() -> None:
     ensure_dirs()
     df, summary, meta = evaluate()
 
-    metrics_path = TABLE_DIR / "frozen2019_RAS_metrics_by_timestep_variable.csv"
-    summary_path = TABLE_DIR / "frozen2019_RAS_summary_by_protocol_region.csv"
+    metrics_path = TABLE_DIR / "selected_RAS_metrics_by_timestep_variable.csv"
+    summary_path = TABLE_DIR / "selected_RAS_summary_by_protocol_region.csv"
     df.to_csv(metrics_path, index=False)
     summary.to_csv(summary_path, index=False)
     outputs = write_result_tables(df)

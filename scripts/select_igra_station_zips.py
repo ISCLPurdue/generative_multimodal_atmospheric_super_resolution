@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Map observation coordinates in a DJ IGRA pickle to NOAA IGRA station IDs."""
+"""Map coordinates in a reference IGRA pickle to NOAA IGRA station IDs."""
 
 from __future__ import annotations
 
@@ -12,7 +12,10 @@ from pathlib import Path
 
 import numpy as np
 
-from independent_year_common import six_hour_index, stratified24
+from observation_preprocessing_common import (
+    seasonally_distributed_24_times,
+    six_hour_index,
+)
 
 
 def read_station_list(path: Path):
@@ -58,7 +61,7 @@ def main() -> None:
         reference = pickle.load(handle)
 
     observed_coords = set()
-    for dt in stratified24(args.reference_year):
+    for dt in seasonally_distributed_24_times(args.reference_year):
         locs_by_channel = reference[six_hour_index(dt)][0][0]
         for locs in locs_by_channel:
             observed_coords.update((round(float(lat), 4), round(float(lon), 4)) for lat, lon in np.asarray(locs))

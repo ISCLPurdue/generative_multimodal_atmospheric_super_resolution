@@ -5,8 +5,6 @@ import json
 import os
 from pathlib import Path
 
-os.environ.setdefault("MPLCONFIGDIR", "/home/xu2279/.tmp/matplotlib")
-
 import h5py
 import matplotlib
 
@@ -16,21 +14,13 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 
+from analysis_paths import output_path, required_path
 
-ROOT = Path("/depot/rmaulik/data/yangxu")
-ERA5_ROOT = ROOT / "data_from_DJ_original_NERSC/1.40625deg_from_full_res_1_step_6hr_h5df"
-TIMESTEP_MANIFEST = (
-    ROOT
-    / "runs/multimodal_madis_13var/20260701__final_protocol_igra_abo_metar_fullyear_2020_2gpu"
-    / "timesteps_full_matched_723.json"
-)
-R_ROOT = ROOT / "runs/goes_13var_3method_grid_protocol_723x12h_20260606/igra_only/samples/igra_only"
-RAS_ROOT = (
-    ROOT
-    / "runs/observation_interface_independent_year_2019/20260726__RplusAplusS_2019_frozen_fullyear_2020_4gpu"
-    / "protocols/RplusAplusS_2019_frozen_strict_conus/samples/RplusAplusS_2019_frozen_strict_conus"
-)
-OUT = ROOT / "reports/2026/08012026report/20260801__frozen2019_full723_spread_skill_rank_histogram"
+ERA5_ROOT = required_path("ERA5_ROOT")
+TIMESTEP_MANIFEST = required_path("EVALUATION_TIMESTEP_MANIFEST")
+R_ROOT = required_path("R_ONLY_SAMPLES_ROOT")
+RAS_ROOT = required_path("RAS_SAMPLES_ROOT")
+OUT = output_path("DISPERSION_ANALYSIS_OUTPUT_ROOT", "dispersion_diagnostics")
 TABLES = OUT / "tables"
 FIGURES = OUT / "figures"
 
@@ -88,8 +78,8 @@ GROUP_LABELS = {
     "aircraft_targeted_variables": "Aircraft-targeted",
 }
 PROTOCOLS = {
-    "R": (R_ROOT, "igra_only"),
-    "R+A+S": (RAS_ROOT, "RplusAplusS_2019_frozen_strict_conus"),
+    "R": R_ROOT,
+    "R+A+S": RAS_ROOT,
 }
 COLORS = {"R": "#2B6EA6", "R+A+S": "#1B8E72"}
 N_MEMBERS = 16
@@ -99,7 +89,7 @@ FINITE_ENSEMBLE_FACTOR = np.sqrt((N_MEMBERS + 1.0) / N_MEMBERS)
 
 def load_timesteps() -> list[int]:
     payload = json.loads(TIMESTEP_MANIFEST.read_text())
-    timesteps = [int(value) for value in payload["matched_timesteps"]]
+    timesteps = [int(value) for value in payload["timesteps"]]
     if len(timesteps) != 723 or len(set(timesteps)) != 723:
         raise ValueError(f"Expected 723 unique timesteps, found {len(timesteps)}")
     return timesteps
@@ -135,8 +125,12 @@ def strict_conus_mask() -> np.ndarray:
 
 
 def sample_path(protocol: str, timestep: int) -> Path:
-    root, tag = PROTOCOLS[protocol]
-    return root / f"{tag}_t{timestep:04d}_e16_s50.npy"
+    matches = sorted(PROTOCOLS[protocol].glob(f"*_t{timestep:04d}_e16_s50.npy"))
+    if len(matches) != 1:
+        raise FileNotFoundError(
+            f"Expected one {protocol} sample file for timestep {timestep}, found {len(matches)}"
+        )
+    return matches[0]
 
 
 def members_physical(
@@ -333,8 +327,8 @@ def plot_main(spread_groups: pd.DataFrame, rank_groups: pd.DataFrame) -> None:
     axes[1].legend(frameon=True)
 
     figure.suptitle("Full-year 2020 ensemble-dispersion diagnostics within CONUS", fontweight="bold")
-    figure.savefig(FIGURES / "frozen2019_full723_spread_skill_rank_histogram_main.png", dpi=300)
-    figure.savefig(FIGURES / "frozen2019_full723_spread_skill_rank_histogram_main.pdf")
+    figure.savefig(FIGURES / "spread_skill_rank_histogram_2020.png", dpi=300)
+    figure.savefig(FIGURES / "spread_skill_rank_histogram_2020.pdf")
     plt.close(figure)
 
 
@@ -364,16 +358,16 @@ def plot_group_rank_histograms(rank_groups: pd.DataFrame) -> None:
     axes[0].set_ylabel("Rank frequency / uniform frequency")
     axes[-1].legend(frameon=True)
     figure.suptitle("Rank histograms by evaluation group within CONUS", fontweight="bold")
-    figure.savefig(FIGURES / "frozen2019_full723_rank_histograms_by_group.png", dpi=300)
-    figure.savefig(FIGURES / "frozen2019_full723_rank_histograms_by_group.pdf")
+    figure.savefig(FIGURES / "rank_histograms_by_group_2020.png", dpi=300)
+    figure.savefig(FIGURES / "rank_histograms_by_group_2020.pdf")
     plt.close(figure)
 
 
 def write_readme(spread_groups: pd.DataFrame) -> None:
     lines = [
-        "# Frozen-2019 Full-723 Spread-Skill and Rank-Histogram Diagnostics",
+        "# Full-Year 2020 Spread-Skill and Rank-Histogram Diagnostics",
         "",
-        "This CPU-only analysis compares the 16-member R and 2019-frozen R+A+S ensembles over all 723 baseline-matched 2020 cases within strict CONUS.",
+        "This CPU-only analysis compares the 16-member R-only and R+A+S ensembles selected using 2019 data over all 723 matched 2020 cases within CONUS.",
         "",
         "## Definitions",
         "",
@@ -408,10 +402,10 @@ def main() -> None:
     FIGURES.mkdir(parents=True, exist_ok=True)
     spread, ranks = evaluate()
     spread_groups, rank_groups = summarize_groups(spread, ranks)
-    spread.to_csv(TABLES / "spread_skill_ratio_by_variable_protocol.csv", index=False)
-    spread_groups.to_csv(TABLES / "spread_skill_ratio_by_group_protocol.csv", index=False)
-    ranks.to_csv(TABLES / "rank_histogram_by_variable_protocol.csv", index=False)
-    rank_groups.to_csv(TABLES / "rank_histogram_by_group_protocol.csv", index=False)
+    spread.to_csv(TABLES / "spread_skill_by_variable.csv", index=False)
+    spread_groups.to_csv(TABLES / "spread_skill_by_group.csv", index=False)
+    ranks.to_csv(TABLES / "rank_histogram_by_variable.csv", index=False)
+    rank_groups.to_csv(TABLES / "rank_histogram_by_group.csv", index=False)
     plot_main(spread_groups, rank_groups)
     plot_group_rank_histograms(rank_groups)
     write_readme(spread_groups)
@@ -423,7 +417,7 @@ def main() -> None:
         "n_members": N_MEMBERS,
         "finite_ensemble_spread_correction": "sqrt((N+1)/N)",
         "rank_tie_seed": 20260801,
-        "protocol_roots": {name: str(root) for name, (root, _) in PROTOCOLS.items()},
+        "protocol_roots": {name: str(root) for name, root in PROTOCOLS.items()},
     }
     (OUT / "manifest.json").write_text(json.dumps(manifest, indent=2) + "\n", encoding="utf-8")
     print(spread_groups.to_string(index=False))

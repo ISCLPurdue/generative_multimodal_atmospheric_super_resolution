@@ -1,11 +1,8 @@
 #!/usr/bin/env python3
 from __future__ import annotations
 
-import os
 from pathlib import Path
 import struct
-
-os.environ.setdefault("MPLCONFIGDIR", "/home/xu2279/.tmp/matplotlib")
 
 import h5py
 import matplotlib
@@ -15,23 +12,13 @@ import matplotlib.pyplot as plt
 from matplotlib.colors import Normalize
 import numpy as np
 
+from analysis_paths import required_path
 
-ROOT = Path("/depot/rmaulik/data/yangxu")
-ERA5 = ROOT / "data_from_DJ_original_NERSC/1.40625deg_from_full_res_1_step_6hr_h5df"
+ERA5 = required_path("ERA5_ROOT")
 TIMESTEP = 278
-R_PATH = ROOT / (
-    "runs/goes_13var_3method_grid_protocol_723x12h_20260606/igra_only/"
-    f"samples/igra_only/igra_only_t{TIMESTEP:04d}_e16_s50.npy"
-)
-RAS_PATH = (
-    ROOT
-    / "runs/observation_interface_independent_year_2019"
-    / "20260726__RplusAplusS_2019_frozen_fullyear_2020_4gpu"
-    / "protocols/RplusAplusS_2019_frozen_strict_conus/samples"
-    / "RplusAplusS_2019_frozen_strict_conus"
-    / f"RplusAplusS_2019_frozen_strict_conus_t{TIMESTEP:04d}_e16_s50.npy"
-)
-SHAPEFILE = ROOT / "data_aux/natural_earth/ne_110m_admin_0_countries/ne_110m_admin_0_countries.shp"
+R_PATH = required_path("FIELD_EXAMPLE_R_SAMPLE")
+RAS_PATH = required_path("FIELD_EXAMPLE_RAS_SAMPLE")
+SHAPEFILE = required_path("NATURAL_EARTH_SHAPEFILE")
 OUT = Path(__file__).resolve().parents[1] / "figures"
 
 VARIABLES = [
@@ -221,7 +208,7 @@ def make_figure(short: str, spec: dict[str, str], r: np.ndarray, ras: np.ndarray
     change_bar = figure.colorbar(change_image, ax=axes[1, 2], shrink=0.84, pad=0.012)
     change_bar.set_label(f"Absolute-error change ({spec['unit']})")
 
-    stem = f"selected_{short}_absolute_errors_and_change_v136_edge_aligned_20260901"
+    stem = f"selected_{short}_absolute_errors_and_change"
     figure.savefig(OUT / f"{stem}.pdf")
     figure.savefig(OUT / f"{stem}.png", dpi=250)
     plt.close(figure)

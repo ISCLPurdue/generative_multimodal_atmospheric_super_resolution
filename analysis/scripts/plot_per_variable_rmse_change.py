@@ -20,29 +20,14 @@ from matplotlib.lines import Line2D
 import numpy as np
 import pandas as pd
 
+from analysis_paths import required_path
 
-ROOT = Path("/depot/rmaulik/data/yangxu")
 VERSION = Path(__file__).resolve().parents[1]
 FIGURES = VERSION / "figures"
 TABLES = VERSION / "tables"
-SOURCE_TABLE = (
-    ROOT
-    / "reports/2026/07272026report"
-    / "20260727__frozen2019_full723_composition_evidence"
-    / "tables/frozen2019_full723_composition_per_variable.csv"
-)
-COMPOSITION_SUMMARY = (
-    ROOT
-    / "reports/2026/07272026report"
-    / "20260727__frozen2019_full723_composition_evidence"
-    / "tables/frozen2019_full723_composition_summary.csv"
-)
-BOOTSTRAP_SUMMARY = (
-    ROOT
-    / "reports/2026/07262026report"
-    / "20260726__frozen2019_RAS_fullyear2020_analysis"
-    / "tables/per_variable_14day_summary_full723.csv"
-)
+SOURCE_TABLE = required_path("COMPOSITION_PER_VARIABLE_CSV")
+COMPOSITION_SUMMARY = required_path("COMPOSITION_SUMMARY_CSV")
+BOOTSTRAP_SUMMARY = required_path("ANNUAL_RMSE_VARIABLE_INTERVALS_CSV")
 
 COMPOSITIONS = ("R+A", "R+S", "R+A+S")
 COLORS = {"R+A": "#2A6FAD", "R+S": "#229E38", "R+A+S": "#7651A8"}
@@ -109,7 +94,7 @@ def load_values() -> pd.DataFrame:
     frame = frame.sort_values(["var_short", "composition"]).reset_index(drop=True)
     TABLES.mkdir(parents=True, exist_ok=True)
     frame.to_csv(
-        TABLES / "figure6_per_variable_mean_rmse_change_v155.csv",
+        TABLES / "figure6_per_variable_mean_rmse_change.csv",
         index=False,
     )
     return frame
@@ -153,7 +138,7 @@ def draw(frame: pd.DataFrame) -> None:
         ax.spines[spine].set_visible(False)
 
     FIGURES.mkdir(parents=True, exist_ok=True)
-    stem = FIGURES / "figure6_per_variable_mean_rmse_change_v155"
+    stem = FIGURES / "figure6_per_variable_mean_rmse_change"
     fig.savefig(stem.with_suffix(".png"), dpi=300, bbox_inches="tight")
     fig.savefig(stem.with_suffix(".pdf"), bbox_inches="tight")
     plt.close(fig)
@@ -220,7 +205,7 @@ def draw_grouped_mean() -> None:
         fontsize=12,
     )
     colorbar.ax.tick_params(labelsize=11)
-    stem = FIGURES / "figure5_grouped_mean_rmse_change_v155"
+    stem = FIGURES / "figure5_grouped_mean_rmse_change"
     fig.savefig(stem.with_suffix(".png"), dpi=300, bbox_inches="tight")
     fig.savefig(stem.with_suffix(".pdf"), bbox_inches="tight")
     plt.close(fig)
@@ -239,7 +224,7 @@ def draw_per_variable_intervals() -> None:
     data = pd.read_csv(BOOTSTRAP_SUMMARY)
     data = data[data["region"].eq("strict_conus")].copy()
     data = data.set_index("var_short").loc[list(VARIABLE_ORDER)]
-    means = data["mean_effect_pct_full723"].astype(float).to_numpy()
+    means = data["mean_effect_pct"].astype(float).to_numpy()
     lows = data["ci95_primary_low_pct"].astype(float).to_numpy()
     highs = data["ci95_primary_high_pct"].astype(float).to_numpy()
     y = np.arange(len(VARIABLE_ORDER))
@@ -327,7 +312,7 @@ def draw_per_variable_intervals() -> None:
     )
     for spine in ("top", "right"):
         ax.spines[spine].set_visible(False)
-    stem = FIGURES / "appendix_per_variable_mean_rmse_change_v155"
+    stem = FIGURES / "appendix_per_variable_mean_rmse_change"
     fig.savefig(stem.with_suffix(".png"), dpi=320, bbox_inches="tight")
     fig.savefig(stem.with_suffix(".pdf"), bbox_inches="tight")
     plt.close(fig)

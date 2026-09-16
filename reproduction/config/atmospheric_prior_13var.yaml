@@ -1,0 +1,33 @@
+model:
+  _target_: igra_gen.models.songunet.SongUNet
+  model_channels: 64
+  embedding_type: positional
+  encoder_type: standard
+  decoder_type: standard
+  channel_mult_noise: 1
+  resample_filter: [1, 1]
+  channel_mult: [1, 2, 4, 8, 16]
+  attn_resolutions: [[32, 64], [16, 32], [8, 16]]
+  padding_mode: circular
+
+data:
+  dataset:
+    _target_: igra_gen.data.era5_sr.ERA5SR
+    root: .
+    split: test
+    conditions: 1
+    variables:
+      - 2m_temperature
+      - 10m_u_component_of_wind
+      - 10m_v_component_of_wind
+      - geopotential_500
+      - geopotential_850
+      - u_component_of_wind_500
+      - u_component_of_wind_850
+      - v_component_of_wind_500
+      - v_component_of_wind_850
+      - temperature_500
+      - temperature_850
+      - specific_humidity_500
+      - specific_humidity_850
+      - land_sea_mask

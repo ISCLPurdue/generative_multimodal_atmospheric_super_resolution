@@ -14,6 +14,7 @@ sys.path.insert(0, str(REPO_ROOT / "src"))
 
 
 CONFIG_PATH = REPO_ROOT / "reproduction/config/selected_interface_2019.json"
+PRIOR_CONFIG_PATH = REPO_ROOT / "reproduction/config/atmospheric_prior_13var.yaml"
 TIMESTEP_PATH = REPO_ROOT / "reproduction/manifests/holdout_timesteps_2020.json"
 
 
@@ -26,7 +27,7 @@ def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--holdout", choices=["aircraft", "surface"], required=True)
     parser.add_argument("--checkpoint", type=Path, required=True)
-    parser.add_argument("--hydra-config", type=Path, required=True)
+    parser.add_argument("--hydra-config", type=Path, default=PRIOR_CONFIG_PATH)
     parser.add_argument("--era5-root", type=Path, required=True)
     parser.add_argument("--igra-pkl", type=Path, required=True)
     parser.add_argument(
@@ -57,13 +58,13 @@ def register_experiment(
     name = f"paper_2020_{holdout}_holdout"
     production.EXPERIMENTS[name] = {
         "use_igra": True,
-        "obs_mode": "aircraft_around25",
+        "obs_mode": "aircraft_pressure_window_25hpa",
         "obs_modality": "aircraft_surface",
         "obs_space": "aircraft_surface_cell_mean_grid",
         "aircraft_source_filter": "acars",
         "aircraft_spatial_support": "strict_conus",
         "aircraft_grid_aggregation": "equal",
-        "aircraft_pressure_window_name": "around25",
+        "aircraft_pressure_window_name": "within_25_hpa",
         "aircraft_data_sources": aircraft_data_sources,
         "surface_variables": production.SURFACE_METAR_VARIABLES,
         "surface_spatial_support": "strict_conus",
@@ -93,7 +94,6 @@ def main() -> None:
         "ensemble": args.ensemble,
         "steps": args.steps,
         "seed": args.seed,
-        "internal_source_commit": config["internal_source_commit"],
         "aircraft_data_sources": aircraft_data_sources,
         "note": (
             "For the selected source, --aircraft-root or --surface-root must "
@@ -111,12 +111,12 @@ def main() -> None:
         seed=args.seed,
         num_steps=args.steps,
         igra_pkl=str(args.igra_pkl),
-        aircraft_around25_root=str(args.aircraft_root),
+        aircraft_root=str(args.aircraft_root),
         surface_metar_root=str(args.surface_root),
         checkpoint=str(args.checkpoint),
         era5_root=str(args.era5_root),
         hydra_cfg=str(args.hydra_config),
-        likelihood_mode="multimodal",
+        likelihood_structure="source_specific",
         std_igra=float(selected["igra_std"]),
         gamma_igra=float(selected["igra_gamma"]),
         lambda_igra=float(selected["igra_lambda"]),

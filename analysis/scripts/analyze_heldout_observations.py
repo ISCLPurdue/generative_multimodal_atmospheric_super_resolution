@@ -13,55 +13,19 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 
+from analysis_paths import output_path, required_path
 
-ROOT = Path("/depot/rmaulik/data/yangxu")
-ERA5_ROOT = ROOT / "data_from_DJ_original_NERSC/1.40625deg_from_full_res_1_step_6hr_h5df"
-SOURCE_REPORT = (
-    ROOT
-    / "reports/2026/07272026report/20260727__frozen2019_holdout_observation_space_analysis"
-)
-OUT = (
-    ROOT
-    / "reports/2026/07302026report/20260730__frozen2019_holdout_matched_marginal_analysis_v1"
-)
+ERA5_ROOT = required_path("ERA5_ROOT")
+HOLDOUT_TARGETS = required_path("HOLDOUT_CELL_TARGETS_CSV")
+OUT = output_path("HELDOUT_ANALYSIS_OUTPUT_ROOT", "heldout_evaluation")
 TABLES = OUT / "tables"
 FIGURES = OUT / "figures"
 
-RA_ROOT = (
-    ROOT
-    / "runs/observation_interface_independent_year_2019"
-    / "20260727__RplusA_2019_frozen_fullyear_2020_4gpu"
-    / "protocols/RplusA_2019_frozen_strict_conus"
-    / "samples/RplusA_2019_frozen_strict_conus"
-)
-RS_ROOT = (
-    ROOT
-    / "runs/observation_interface_independent_year_2019"
-    / "20260727__RplusS_2019_frozen_fullyear_2020_4gpu"
-    / "protocols/RplusS_2019_frozen_strict_conus"
-    / "samples/RplusS_2019_frozen_strict_conus"
-)
-RAS_ROOT = (
-    ROOT
-    / "runs/observation_interface_independent_year_2019"
-    / "20260726__RplusAplusS_2019_frozen_fullyear_2020_4gpu"
-    / "protocols/RplusAplusS_2019_frozen_strict_conus"
-    / "samples/RplusAplusS_2019_frozen_strict_conus"
-)
-SURFACE_HOLDOUT_ROOT = (
-    ROOT
-    / "runs/observation_interface_independent_year_2019"
-    / "20260727__heldout_surface_cell20_2019_frozen_strat24_1gpu"
-    / "protocols/RplusAplusS_surface80_2019_frozen_strict_conus"
-    / "samples/RplusAplusS_surface80_2019_frozen_strict_conus"
-)
-AIRCRAFT_HOLDOUT_ROOT = (
-    ROOT
-    / "runs/observation_interface_independent_year_2019"
-    / "20260727__heldout_aircraft_cellvar20_2019_frozen_strat24_1gpu"
-    / "protocols/RplusAplusS_aircraft80_2019_frozen_strict_conus"
-    / "samples/RplusAplusS_aircraft80_2019_frozen_strict_conus"
-)
+RA_ROOT = required_path("RA_SAMPLES_ROOT")
+RS_ROOT = required_path("RS_SAMPLES_ROOT")
+RAS_ROOT = required_path("RAS_SAMPLES_ROOT")
+SURFACE_HOLDOUT_ROOT = required_path("SURFACE_HOLDOUT_SAMPLES_ROOT")
+AIRCRAFT_HOLDOUT_ROOT = required_path("AIRCRAFT_HOLDOUT_SAMPLES_ROOT")
 
 VARIABLES = [
     "2m_temperature",
@@ -217,7 +181,7 @@ def bootstrap_mean(values: np.ndarray, rng: np.random.Generator) -> tuple[float,
 def summarize_variables(effects: pd.DataFrame) -> pd.DataFrame:
     rng = np.random.default_rng(BOOTSTRAP_SEED)
     rows = []
-    selected = effects[effects["method"].isin(["heldout80", "full_RAS"])]
+    selected = effects[effects["method"].eq("heldout80")]
     for keys, group in selected.groupby(
         ["family", "variable", "var_short", "method", "method_display"], sort=False
     ):
@@ -242,7 +206,7 @@ def summarize_variables(effects: pd.DataFrame) -> pd.DataFrame:
 
 def summarize_families(effects: pd.DataFrame) -> tuple[pd.DataFrame, pd.DataFrame]:
     timestep_effects = (
-        effects[effects["method"].isin(["heldout80", "full_RAS"])]
+        effects[effects["method"].eq("heldout80")]
         .groupby(["family", "method", "method_display", "timestep"], as_index=False)[
             "pct_change_vs_matched_baseline"
         ]
@@ -334,7 +298,7 @@ def make_figure(family_summary: pd.DataFrame, variable_summary: pd.DataFrame) ->
     axes[1].legend(frameon=True, loc="lower left")
 
     fig.suptitle(
-        "Frozen-2019 interfaces improve 2020 observations excluded from conditioning",
+        "Interfaces selected with 2019 data improve 2020 observations excluded from conditioning",
         fontsize=15,
         weight="bold",
         color=navy,
@@ -348,7 +312,7 @@ def write_readme(family_summary: pd.DataFrame, variable_summary: pd.DataFrame, f
     heldout = family_summary[family_summary["method"].eq("heldout80")].set_index("family")
     surface = heldout.loc["surface"]
     aircraft = heldout.loc["aircraft"]
-    text = f"""# Frozen-2019 Matched-Marginal Holdout Analysis
+    text = f"""# Matched-marginal evaluation at observations excluded from conditioning
 
 This analysis summarizes the completed 2020 holdout runs.
 It replaces the earlier R-only pooled comparison with the matched marginal
@@ -379,8 +343,8 @@ ensemble seed, not independent-network or long-gap temporal validation.
 
 - `{TABLES / 'rmse_by_timestep_variable.csv'}`
 - `{TABLES / 'paired_effects_by_timestep_variable.csv'}`
-- `{TABLES / 'matched_marginal_variable_summary.csv'}`
-- `{TABLES / 'matched_marginal_family_summary.csv'}`
+- `{TABLES / 'heldout_variable_summary.csv'}`
+- `{TABLES / 'heldout_family_summary.csv'}`
 - `{TABLES / 'matched_marginal_timestep_effects.csv'}`
 - `{figure}`
 """
@@ -390,7 +354,7 @@ ensemble seed, not independent-network or long-gap temporal validation.
 def main() -> None:
     TABLES.mkdir(parents=True, exist_ok=True)
     FIGURES.mkdir(parents=True, exist_ok=True)
-    targets = pd.read_csv(SOURCE_REPORT / "tables/holdout_cell_targets.csv")
+    targets = pd.read_csv(HOLDOUT_TARGETS)
     rmse = attach_predictions(targets)
     effects = paired_effects(rmse)
     variable_summary = summarize_variables(effects)
@@ -399,8 +363,8 @@ def main() -> None:
 
     rmse.to_csv(TABLES / "rmse_by_timestep_variable.csv", index=False)
     effects.to_csv(TABLES / "paired_effects_by_timestep_variable.csv", index=False)
-    variable_summary.to_csv(TABLES / "matched_marginal_variable_summary.csv", index=False)
-    family_summary.to_csv(TABLES / "matched_marginal_family_summary.csv", index=False)
+    variable_summary.to_csv(TABLES / "heldout_variable_summary.csv", index=False)
+    family_summary.to_csv(TABLES / "heldout_family_summary.csv", index=False)
     timestep_effects.to_csv(TABLES / "matched_marginal_timestep_effects.csv", index=False)
     write_readme(family_summary, variable_summary, figure)
     print(

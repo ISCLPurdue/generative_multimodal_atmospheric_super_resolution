@@ -4,10 +4,7 @@
 from __future__ import annotations
 
 import csv
-import os
 from pathlib import Path
-
-os.environ.setdefault("MPLCONFIGDIR", "/home/xu2279/.tmp/matplotlib")
 
 import matplotlib
 
@@ -16,20 +13,10 @@ import matplotlib.pyplot as plt
 from matplotlib.colors import TwoSlopeNorm
 import numpy as np
 
+from analysis_paths import required_path
 
-ROOT = Path("/depot/rmaulik/data/yangxu")
-REPORT = (
-    ROOT
-    / "reports/2026/07302026report"
-    / "20260730__frozen2019_RAS_likelihood_mechanism_v1"
-)
-STATIC = REPORT / "tables"
-TRACE = (
-    ROOT
-    / "runs/observation_interface_independent_year_2019"
-    / "20260730__frozen2019_RAS_t0000_instrumented_trace_v1"
-    / "tables"
-)
+STATIC = required_path("GUIDANCE_STATIC_TABLE_ROOT")
+TRACE = required_path("GUIDANCE_TRACE_TABLE_ROOT")
 OUT = Path(__file__).resolve().parents[1] / "figures"
 
 FACTORS = ("R", "A", "S")
@@ -205,7 +192,7 @@ def plot_direct_mechanism() -> None:
         y=1.02,
     )
     fig.tight_layout(w_pad=2.0)
-    save(fig, "source_likelihood_gradient_geometry_v137_20260901")
+    save(fig, "source_likelihood_gradient_geometry")
 
 
 def runtime_data() -> tuple[np.ndarray, np.ndarray, dict[str, np.ndarray], dict[str, np.ndarray]]:
@@ -316,7 +303,7 @@ def plot_runtime_mechanism() -> None:
         y=1.05,
     )
     fig.tight_layout(w_pad=2.0)
-    save(fig, "runtime_source_guidance_coupling_v137_20260901")
+    save(fig, "runtime_source_guidance_coupling")
 
 
 def main() -> None:

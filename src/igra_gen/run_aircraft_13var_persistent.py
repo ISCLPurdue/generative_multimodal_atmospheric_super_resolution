@@ -1,4 +1,9 @@
-import argparse
+"""Inference engine for the paper's radiosonde, aircraft, and surface interfaces.
+
+Use the entry points in ``reproduction/`` to register and run the published
+R, R+A, R+S, and R+A+S configurations.
+"""
+
 import json
 import os
 import pickle
@@ -29,12 +34,8 @@ HYDRA_CFG = os.environ.get("ATMOSPHERIC_PRIOR_HYDRA_CONFIG", "")
 DEFAULT_CHECKPOINT = os.environ.get("ATMOSPHERIC_PRIOR_CHECKPOINT", "")
 IGRA_PKL = os.environ.get("IGRA_PKL", "")
 NUM_CHANNELS = 13
-AIRCRAFT_AROUND5_ROOT = os.environ.get("AIRCRAFT_AROUND5_ROOT", "")
-AIRCRAFT_AROUND25_ROOT = os.environ.get("AIRCRAFT_AROUND25_ROOT", "")
+AIRCRAFT_ROOT = os.environ.get("AIRCRAFT_ROOT", "")
 SURFACE_METAR_ROOT = os.environ.get("SURFACE_METAR_ROOT", "")
-# Legacy aliases retained for old run manifests and earlier diagnostics.
-AIRCRAFT_CLEAN_ROOT = AIRCRAFT_AROUND5_ROOT
-AIRCRAFT_MID_ROOT = AIRCRAFT_AROUND25_ROOT
 
 IGRA_VARIABLES = [
     "2m_temperature",
@@ -67,71 +68,7 @@ SURFACE_METAR_VARIABLES = [
     "10m_v_component_of_wind",
 ]
 
-# Descriptive names used by the public wrappers. The implementation
-# names on the right are retained so historical experiment manifests remain
-# readable without changing their provenance.
-PAPER_OBS_SPACE_ALIASES = {
-    "aircraft_cell_mean_grid": "aircraft_superob_grid",
-    "surface_cell_mean_grid": "surface_superob_grid",
-    "aircraft_surface_cell_mean_grid": "aircraft_surface_superob_grid",
-}
-
-EXPERIMENTS = {
-    "igra_only": {
-        "use_igra": True,
-        "obs_mode": "none",
-        "obs_modality": None,
-        "description": "IGRA radiosonde all-13 observations only.",
-    },
-    "igra_all13_aircraft_clean_v2": {
-        "use_igra": True,
-        "obs_mode": "aircraft_clean",
-        "obs_modality": "aircraft",
-        "obs_space": "aircraft_weighted_sparse",
-        "aircraft_weighting": "era5_cell_balanced",
-        "description": "IGRA all-13 plus MADIS aircraft 500=495-505 and 850=845-855 hPa, sparse point H with ERA5-cell-balanced weights.",
-    },
-    "igra_all13_aircraft_clean_v3": {
-        "use_igra": True,
-        "obs_mode": "aircraft_clean",
-        "obs_modality": "aircraft",
-        "obs_space": "aircraft_superob_grid",
-        "description": "IGRA all-13 plus MADIS aircraft 500=495-505 and 850=845-855 hPa, ERA5-cell superob grid H.",
-    },
-    "igra_all13_aircraft_mid_v2": {
-        "use_igra": True,
-        "obs_mode": "aircraft_mid",
-        "obs_modality": "aircraft",
-        "obs_space": "aircraft_weighted_sparse",
-        "aircraft_weighting": "era5_cell_balanced",
-        "description": "IGRA all-13 plus MADIS aircraft 500=475-525 and 850=825-875 hPa, sparse point H with ERA5-cell-balanced weights.",
-    },
-    "igra_all13_aircraft_mid_v3": {
-        "use_igra": True,
-        "obs_mode": "aircraft_mid",
-        "obs_modality": "aircraft",
-        "obs_space": "aircraft_superob_grid",
-        "description": "IGRA all-13 plus MADIS aircraft 500=475-525 and 850=825-875 hPa, ERA5-cell superob grid H.",
-    },
-    "igra_all13_aircraft_mid_v5_acars_superob": {
-        "use_igra": True,
-        "obs_mode": "aircraft_mid",
-        "obs_modality": "aircraft",
-        "obs_space": "aircraft_superob_grid",
-        "aircraft_source_filter": "acars",
-        "aircraft_spatial_support": "strict_conus",
-        "description": "IGRA all-13 plus acars-only MADIS aircraft mid-window, ERA5-cell superob grid H.",
-    },
-    "igra_all13_aircraft_mid_v6_profiles_superob": {
-        "use_igra": True,
-        "obs_mode": "aircraft_mid",
-        "obs_modality": "aircraft",
-        "obs_space": "aircraft_superob_grid",
-        "aircraft_source_filter": "acarsProfiles",
-        "aircraft_spatial_support": "strict_conus",
-        "description": "IGRA all-13 plus acarsProfiles-only MADIS aircraft mid-window, ERA5-cell superob grid H.",
-    },
-}
+EXPERIMENTS: Dict[str, dict] = {}
 
 SPATIAL_SUPPORTS = {
     "strict_conus": {
@@ -157,257 +94,6 @@ SPATIAL_SUPPORTS = {
 }
 
 
-def _add_stage1_aircraft_experiments() -> None:
-    """Register first-pass aircraft ablation experiments.
-
-    Stage 1 uses the mid pressure window and varies spatial support plus H
-    operator.  V2 and V4 are source-split likelihoods.  V3 is kept as the
-    merged-superob reference so we can compare to the initial t0000 experiment.
-    """
-    for support in SPATIAL_SUPPORTS:
-        EXPERIMENTS[f"stage1_{support}_mid_v1_split_simple_sparse"] = {
-            "use_igra": True,
-            "obs_mode": "aircraft_mid",
-            "obs_modality": "aircraft_split",
-            "obs_space": "aircraft_simple_sparse_split",
-            "aircraft_spatial_support": support,
-            "description": f"IGRA all-13 plus source-split MADIS aircraft mid-window V1 simple sparse point H without cell balancing, support={support}.",
-        }
-        EXPERIMENTS[f"stage1_{support}_mid_v2_split_sparse"] = {
-            "use_igra": True,
-            "obs_mode": "aircraft_mid",
-            "obs_modality": "aircraft_split",
-            "obs_space": "aircraft_weighted_sparse_split",
-            "aircraft_spatial_support": support,
-            "description": f"IGRA all-13 plus source-split MADIS aircraft mid-window V2 weighted sparse H, support={support}.",
-        }
-        EXPERIMENTS[f"stage1_{support}_mid_v3_merged_superob"] = {
-            "use_igra": True,
-            "obs_mode": "aircraft_mid",
-            "obs_modality": "aircraft",
-            "obs_space": "aircraft_superob_grid",
-            "aircraft_spatial_support": support,
-            "description": f"IGRA all-13 plus merged MADIS aircraft mid-window V3 superob/grid H, support={support}.",
-        }
-        EXPERIMENTS[f"stage1_{support}_mid_v4_split_dense"] = {
-            "use_igra": True,
-            "obs_mode": "aircraft_mid",
-            "obs_modality": "aircraft_split",
-            "obs_space": "aircraft_superob_grid_split",
-            "aircraft_spatial_support": support,
-            "description": f"IGRA all-13 plus source-split MADIS aircraft mid-window V4 masked-grid H, support={support}.",
-        }
-
-
-_add_stage1_aircraft_experiments()
-
-
-def _add_acars_h_window_ablation_experiments() -> None:
-    """Register acars-only H/window ablation experiments.
-
-    These are the clean first20 experiments requested for the aircraft branch:
-    strict-CONUS support, acars/Aircraft Based Reports only, and two pressure
-    windows named by half-width around 500/850 hPa.
-    """
-    windows = {
-        "around25": ("aircraft_around25", "500=475-525 hPa and 850=825-875 hPa"),
-        "around5": ("aircraft_around5", "500=495-505 hPa and 850=845-855 hPa"),
-    }
-    variants = {
-        "v1_simple_sparse": {
-            "obs_space": "aircraft_simple_sparse",
-            "description": "V1 simple sparse point H with equal point weights.",
-        },
-        "v2_cell_balanced_sparse": {
-            "obs_space": "aircraft_weighted_sparse",
-            "description": "V2 sparse point H with inverse-count ERA5-cell balancing.",
-        },
-        "v4_equal_cell_mean": {
-            "obs_space": "aircraft_superob_grid",
-            "aircraft_grid_aggregation": "equal",
-            "description": "V4 baseline: equal-weight ERA5-cell mean, then masked grid loss.",
-        },
-        "v4b_pressure_weighted": {
-            "obs_space": "aircraft_superob_grid",
-            "aircraft_grid_aggregation": "pressure",
-            "description": "V4b: pressure-offset-weighted ERA5-cell mean, then masked grid loss.",
-        },
-        "v4c_distance_weighted": {
-            "obs_space": "aircraft_superob_grid",
-            "aircraft_grid_aggregation": "distance",
-            "description": "V4c: within-cell distance-weighted ERA5-cell mean, then masked grid loss.",
-        },
-        "v4d_pressure_distance_weighted": {
-            "obs_space": "aircraft_superob_grid",
-            "aircraft_grid_aggregation": "pressure_distance",
-            "description": "V4d: pressure-offset and within-cell-distance weighted ERA5-cell mean.",
-        },
-    }
-    for window_name, (obs_mode, window_desc) in windows.items():
-        for variant_name, variant in variants.items():
-            EXPERIMENTS[f"acars_{window_name}_{variant_name}"] = {
-                "use_igra": True,
-                "obs_mode": obs_mode,
-                "obs_modality": "aircraft",
-                "aircraft_source_filter": "acars",
-                "aircraft_spatial_support": "strict_conus",
-                "aircraft_pressure_window_name": window_name,
-                "aircraft_pressure_window_description": window_desc,
-                "aircraft_pressure_weight_sigma_hpa": 15.0,
-                "aircraft_distance_weight_sigma_cell": 1.0,
-                **variant,
-                "description": (
-                    f"IGRA all-13 plus acars-only MADIS Aircraft Based Reports, "
-                    f"{window_name} ({window_desc}), strict-CONUS support. {variant['description']}"
-                ),
-            }
-
-
-_add_acars_h_window_ablation_experiments()
-
-
-def _add_surface_metar_stagea_experiments() -> None:
-    variants = {
-        "v1_simple_sparse": {
-            "obs_space": "surface_simple_sparse",
-            "description": "V1 simple sparse point H with equal point weights.",
-        },
-        "v2_cell_balanced_sparse": {
-            "obs_space": "surface_weighted_sparse",
-            "description": "V2 sparse point H with inverse-count ERA5-cell balancing.",
-        },
-        "v4_equal_cell_mean": {
-            "obs_space": "surface_superob_grid",
-            "surface_grid_aggregation": "equal",
-            "description": "V4 equal-weight ERA5-cell mean, then masked grid loss.",
-        },
-    }
-    for variant_name, variant in variants.items():
-        EXPERIMENTS[f"metar_strict_conus_t2muv10_{variant_name}"] = {
-            "use_igra": True,
-            "obs_mode": "surface_metar",
-            "obs_modality": "surface",
-            "surface_variables": SURFACE_METAR_VARIABLES,
-            "surface_spatial_support": "strict_conus",
-            **variant,
-            "description": (
-                "IGRA all-13 plus NOAA MADIS METAR surface observations "
-                "(t2m/u10/v10), strict-CONUS support. "
-                f"{variant['description']}"
-            ),
-        }
-
-
-_add_surface_metar_stagea_experiments()
-
-
-def _add_three_source_experiments() -> None:
-    EXPERIMENTS["igra_abo_keep015_metar_v4_equal_cell_mean_strict_conus"] = {
-        "use_igra": True,
-        "obs_mode": "aircraft_around25",
-        "obs_modality": "aircraft_surface",
-        "obs_space": "aircraft_surface_superob_grid",
-        "aircraft_source_filter": "combined",
-        "aircraft_spatial_support": "strict_conus",
-        "aircraft_grid_aggregation": "equal",
-        "surface_variables": SURFACE_METAR_VARIABLES,
-        "surface_spatial_support": "strict_conus",
-        "surface_grid_aggregation": "equal",
-        "description": (
-            "IGRA all-13 plus NOAA MADIS ABO aircraft observations "
-            "(keep dataSource={0,1,5}, around25, V4 equal-cell mean) "
-            "and NOAA MADIS METAR surface observations (t2m/u10/v10, "
-            "V4 equal-cell mean), strict-CONUS support."
-        ),
-    }
-
-
-_add_three_source_experiments()
-
-
-def _add_global_pilot_experiments() -> None:
-    """Register global-support pilots without changing calibrated parameters."""
-    EXPERIMENTS["igra_abo_keep015_global_v4_equal_cell_mean"] = {
-        "use_igra": True,
-        "obs_mode": "aircraft_around25",
-        "obs_modality": "aircraft",
-        "obs_space": "aircraft_superob_grid",
-        "aircraft_source_filter": "combined",
-        "aircraft_spatial_support": "global",
-        "aircraft_grid_aggregation": "equal",
-        "description": (
-            "IGRA all-13 plus global NOAA MADIS ABO aircraft observations "
-            "(keep dataSource={0,1,5}, around25, V4 equal-cell mean)."
-        ),
-    }
-    EXPERIMENTS["igra_metar_global_v4_equal_cell_mean"] = {
-        "use_igra": True,
-        "obs_mode": "surface_metar_global",
-        "obs_modality": "surface",
-        "obs_space": "surface_superob_grid",
-        "surface_variables": SURFACE_METAR_VARIABLES,
-        "surface_spatial_support": "global",
-        "surface_grid_aggregation": "equal",
-        "description": (
-            "IGRA all-13 plus global NOAA MADIS METAR t2m/u10/v10 observations "
-            "using V4 equal-cell mean."
-        ),
-    }
-    EXPERIMENTS["igra_abo_keep015_metar_global_v4_equal_cell_mean"] = {
-        "use_igra": True,
-        "obs_mode": "aircraft_around25",
-        "obs_modality": "aircraft_surface",
-        "obs_space": "aircraft_surface_superob_grid",
-        "aircraft_source_filter": "combined",
-        "aircraft_spatial_support": "global",
-        "aircraft_grid_aggregation": "equal",
-        "surface_variables": SURFACE_METAR_VARIABLES,
-        "surface_spatial_support": "global",
-        "surface_grid_aggregation": "equal",
-        "description": (
-            "IGRA all-13 plus global NOAA MADIS ABO keep015/around25 and global "
-            "NOAA MADIS METAR t2m/u10/v10, both with V4 equal-cell mean."
-        ),
-    }
-
-
-_add_global_pilot_experiments()
-
-
-def parse_timesteps(text: str) -> List[int]:
-    out = []
-    for part in text.split(","):
-        part = part.strip()
-        if not part:
-            continue
-        if "-" in part:
-            a, b = part.split("-", 1)
-            out.extend(range(int(a), int(b) + 1))
-        else:
-            out.append(int(part))
-    return list(dict.fromkeys(out))
-
-
-def default_timesteps_16() -> List[int]:
-    """Four representative groups of 2020 six-hourly analysis indices."""
-    return (
-        list(range(0, 4))
-        + list(range(364, 368))
-        + list(range(728, 732))
-        + list(range(1096, 1100))
-    )
-
-
-def default_timesteps_first20() -> List[int]:
-    """First 20 six-hourly 2020 timesteps: t0000 through t0019."""
-    return list(range(0, 20))
-
-
-def default_timesteps_first20_12h() -> List[int]:
-    """First 20 matched 12-hourly 2020 timesteps: t0000, t0002, ..., t0038."""
-    return [2 * i for i in range(20)]
-
-
 def empty_channels(n_channels: int) -> Tuple[List[np.ndarray], List[np.ndarray]]:
     ch_locs = [np.empty((0, 2), dtype=np.float32) for _ in range(n_channels)]
     ch_vals = [np.empty((0,), dtype=np.float32) for _ in range(n_channels)]
@@ -429,31 +115,22 @@ class PersistentFullPoolRunner:
         S_max: float = 50.0,
         S_noise: float = 1.003,
         igra_pkl: str = IGRA_PKL,
-        aircraft_around5_root: str = AIRCRAFT_AROUND5_ROOT,
-        aircraft_around25_root: str = AIRCRAFT_AROUND25_ROOT,
-        aircraft_clean_root: str = AIRCRAFT_CLEAN_ROOT,
-        aircraft_mid_root: str = AIRCRAFT_MID_ROOT,
+        aircraft_root: str = AIRCRAFT_ROOT,
         surface_metar_root: str = SURFACE_METAR_ROOT,
         checkpoint: str = DEFAULT_CHECKPOINT,
         era5_root: str = ERA5_ROOT,
         hydra_cfg: str = HYDRA_CFG,
         num_channels: int = NUM_CHANNELS,
-        likelihood_mode: str = "multimodal",
+        likelihood_structure: str = "source_specific",
         std_igra: float = 5e-4,
         gamma_igra: float = 2e-6,
         lambda_igra: float = 1.0,
         std_aircraft: float = 5e-4,
-        gamma_aircraft: float = 2e-6,
-        lambda_aircraft: float = 1.0,
-        std_surface: float = 5e-4,
-        gamma_surface: float = 2e-6,
-        lambda_surface: float = 1.0,
-        std_aircraft_acars: Optional[float] = None,
-        gamma_aircraft_acars: Optional[float] = None,
-        lambda_aircraft_acars: Optional[float] = None,
-        std_aircraft_profiles: Optional[float] = None,
-        gamma_aircraft_profiles: Optional[float] = None,
-        lambda_aircraft_profiles: Optional[float] = None,
+        gamma_aircraft: float = 2e-5,
+        lambda_aircraft: float = 0.4,
+        std_surface: float = 1.25e-4,
+        gamma_surface: float = 4e-5,
+        lambda_surface: float = 0.4,
         era5_split: str = "test",
         calendar_year: int = 2020,
     ):
@@ -471,10 +148,7 @@ class PersistentFullPoolRunner:
         self.S_noise = S_noise
         self.igra_pkl = igra_pkl
         self.aircraft_roots = {
-            "aircraft_around5": aircraft_around5_root,
-            "aircraft_around25": aircraft_around25_root,
-            "aircraft_clean": aircraft_clean_root,
-            "aircraft_mid": aircraft_mid_root,
+            "aircraft_pressure_window_25hpa": aircraft_root,
         }
         self.surface_metar_root = surface_metar_root
         self.checkpoint = checkpoint
@@ -483,9 +157,9 @@ class PersistentFullPoolRunner:
         self.num_channels = num_channels
         self.era5_split = era5_split
         self.calendar_year = int(calendar_year)
-        if likelihood_mode not in {"legacy", "multimodal"}:
-            raise ValueError(f"Unknown likelihood_mode={likelihood_mode}")
-        self.likelihood_mode = likelihood_mode
+        if likelihood_structure not in {"single", "source_specific"}:
+            raise ValueError(f"Unknown likelihood_structure={likelihood_structure}")
+        self.likelihood_structure = likelihood_structure
         self.likelihood_kwargs = {
             "std_igra": std_igra,
             "gamma_igra": gamma_igra,
@@ -496,12 +170,6 @@ class PersistentFullPoolRunner:
             "std_surface": std_surface,
             "gamma_surface": gamma_surface,
             "lambda_surface": lambda_surface,
-            "std_aircraft_acars": std_aircraft if std_aircraft_acars is None else std_aircraft_acars,
-            "gamma_aircraft_acars": gamma_aircraft if gamma_aircraft_acars is None else gamma_aircraft_acars,
-            "lambda_aircraft_acars": lambda_aircraft if lambda_aircraft_acars is None else lambda_aircraft_acars,
-            "std_aircraft_profiles": std_aircraft if std_aircraft_profiles is None else std_aircraft_profiles,
-            "gamma_aircraft_profiles": gamma_aircraft if gamma_aircraft_profiles is None else gamma_aircraft_profiles,
-            "lambda_aircraft_profiles": lambda_aircraft if lambda_aircraft_profiles is None else lambda_aircraft_profiles,
         }
 
         self.device = "cuda" if torch.cuda.is_available() else "cpu"
@@ -552,7 +220,7 @@ class PersistentFullPoolRunner:
         self.sample_fn = sampler_factory(
             mode="edm_pos_sample",
             net=self.net,
-            conditioning_type="multimodal" if self.likelihood_mode == "multimodal" else "igra",
+            conditioning_type="multimodal" if self.likelihood_structure == "source_specific" else "igra",
             in_shape=(16, 32),
             target_shape=(128, 256),
             lat_path=os.path.join(self.era5_root, "lat.npy"),
@@ -659,9 +327,7 @@ class PersistentFullPoolRunner:
             return np.ones(products.shape, dtype=bool)
         if source_filter == "acars":
             return products == "acars"
-        if source_filter in {"acarsProfiles", "profiles"}:
-            return products == "acarsProfiles"
-        raise ValueError("source_filter must be one of None/combined/acars/acarsProfiles/profiles")
+        raise ValueError("source_filter must be one of None/combined/acars")
 
     def aggregate_points_to_era5_grid(
         self,
@@ -783,7 +449,6 @@ class PersistentFullPoolRunner:
             cells[var] = int(np.unique(self._nearest_era5_flat_cells(locs)).size) if vals.size else 0
             source_counts[var] = {
                 "acars": int(np.sum(products == "acars")) if vals.size else 0,
-                "acarsProfiles": int(np.sum(products == "acarsProfiles")) if vals.size else 0,
                 **{f"dataSource_{int(code)}": int(np.sum(source_codes == code)) for code in np.unique(source_codes)},
             }
         metadata_json = str(data["metadata_json"]) if "metadata_json" in data.files else "{}"
@@ -804,7 +469,7 @@ class PersistentFullPoolRunner:
             return meta, ch_locs, ch_vals, ch_weights, ch_pressures
         return meta, ch_locs, ch_vals, ch_weights
 
-    def load_aircraft_superob_grid(
+    def load_aircraft_cell_mean_grid(
         self,
         obs_mode: str,
         timestep: int,
@@ -849,7 +514,7 @@ class PersistentFullPoolRunner:
             max_points[var] = int(count.max()) if count.size else 0
         count_stack = np.stack(counts, axis=0)
         meta.update({
-            "obs_space": "aircraft_superob_grid",
+            "obs_space": "aircraft_cell_mean_grid",
             "aircraft_grid_aggregation": aggregation,
             "aircraft_pressure_weight_sigma_hpa": str(sigma_pressure_hpa),
             "aircraft_distance_weight_sigma_cell": str(sigma_distance_cell),
@@ -857,61 +522,6 @@ class PersistentFullPoolRunner:
             "aircraft_max_points_per_cell_json": json.dumps(max_points, sort_keys=True),
         })
         return meta, grids, masks, channel_indices, count_stack
-
-    def load_aircraft_measurements_split(
-        self,
-        obs_mode: str,
-        timestep: int,
-        spatial_support: str,
-        weighting: str = "cell_balanced",
-    ) -> Tuple[Dict[str, str], Dict[str, Tuple[List[np.ndarray], List[np.ndarray], List[np.ndarray]]]]:
-        out: Dict[str, Tuple[List[np.ndarray], List[np.ndarray], List[np.ndarray]]] = {}
-        metas = {}
-        for source_filter, key in [("acars", "aircraft_acars"), ("acarsProfiles", "aircraft_profiles")]:
-            meta, locs, vals, weights = self.load_aircraft_measurements(
-                obs_mode,
-                timestep,
-                source_filter=source_filter,
-                spatial_support=spatial_support,
-            )
-            if weighting == "simple":
-                weights = [self._simple_weights(x) for x in locs]
-            elif weighting != "cell_balanced":
-                raise ValueError(f"Unknown aircraft split sparse weighting={weighting}")
-            metas[key] = meta
-            out[key] = (locs, vals, weights)
-        meta = {
-            "obs_mode": obs_mode,
-            "aircraft_spatial_support": spatial_support,
-            "aircraft_split_sparse_weighting": weighting,
-            "aircraft_split_meta_json": json.dumps(metas, sort_keys=True),
-        }
-        return meta, out
-
-    def load_aircraft_superob_grid_split(
-        self,
-        obs_mode: str,
-        timestep: int,
-        spatial_support: str,
-    ) -> Tuple[Dict[str, str], Dict[str, Tuple[List[np.ndarray], List[np.ndarray], List[int], np.ndarray]]]:
-        out: Dict[str, Tuple[List[np.ndarray], List[np.ndarray], List[int], np.ndarray]] = {}
-        metas = {}
-        for source_filter, key in [("acars", "aircraft_acars"), ("acarsProfiles", "aircraft_profiles")]:
-            meta, grids, masks, channel_indices, count_stack = self.load_aircraft_superob_grid(
-                obs_mode,
-                timestep,
-                source_filter=source_filter,
-                spatial_support=spatial_support,
-            )
-            metas[key] = meta
-            out[key] = (grids, masks, channel_indices, count_stack)
-        meta = {
-            "obs_mode": obs_mode,
-            "obs_space": "aircraft_superob_grid_split",
-            "aircraft_spatial_support": spatial_support,
-            "aircraft_split_meta_json": json.dumps(metas, sort_keys=True),
-        }
-        return meta, out
 
     def load_surface_metar_measurements(
         self,
@@ -963,7 +573,7 @@ class PersistentFullPoolRunner:
         }
         return meta, ch_locs, ch_vals, ch_weights
 
-    def load_surface_metar_superob_grid(
+    def load_surface_metar_cell_mean_grid(
         self,
         timestep: int,
         variables: Optional[Iterable[str]] = None,
@@ -1000,7 +610,7 @@ class PersistentFullPoolRunner:
             max_points[var] = int(count.max()) if count.size else 0
         count_stack = np.stack(counts, axis=0) if counts else np.zeros((0,), dtype=np.int64)
         meta.update({
-            "obs_space": "surface_superob_grid",
+            "obs_space": "surface_cell_mean_grid",
             "surface_grid_aggregation": aggregation,
             "surface_valid_era5_cells_json": json.dumps(valid_cells, sort_keys=True),
             "surface_max_points_per_cell_json": json.dumps(max_points, sort_keys=True),
@@ -1048,15 +658,10 @@ class PersistentFullPoolRunner:
 
         target_dt = self.timestep_to_datetime(timestep)
         io.log0(f"Running {experiment} t{timestep:04d} target_dt={target_dt.isoformat()}")
-        requested_obs_space = spec.get("obs_space", "points")
-        obs_space = PAPER_OBS_SPACE_ALIASES.get(
-            requested_obs_space, requested_obs_space
-        )
+        obs_space = spec.get("obs_space", "points")
         obs_mask = obs_count = None
         aircraft_locs = aircraft_vals = aircraft_weights = None
         aircraft_grids = aircraft_masks = aircraft_channel_indices = None
-        aircraft_split_sparse = None
-        aircraft_split_grid = None
         surface_locs = surface_vals = surface_weights = None
         surface_grids = surface_masks = surface_channel_indices = None
         if obs_space == "aircraft_surface_sparse":
@@ -1096,17 +701,8 @@ class PersistentFullPoolRunner:
             )
             obs_locs = np.empty((0, 2), dtype=np.float32)
             obs_vals = np.empty((0,), dtype=np.float32)
-        elif obs_space in {"aircraft_weighted_sparse_split", "aircraft_simple_sparse_split"}:
-            obs_meta, aircraft_split_sparse = self.load_aircraft_measurements_split(
-                spec["obs_mode"],
-                timestep,
-                spatial_support=spec.get("aircraft_spatial_support", "global"),
-                weighting="simple" if obs_space == "aircraft_simple_sparse_split" else "cell_balanced",
-            )
-            obs_locs = np.empty((0, 2), dtype=np.float32)
-            obs_vals = np.empty((0,), dtype=np.float32)
-        elif obs_space == "aircraft_superob_grid":
-            obs_meta, aircraft_grids, aircraft_masks, aircraft_channel_indices, obs_count = self.load_aircraft_superob_grid(
+        elif obs_space == "aircraft_cell_mean_grid":
+            obs_meta, aircraft_grids, aircraft_masks, aircraft_channel_indices, obs_count = self.load_aircraft_cell_mean_grid(
                 spec["obs_mode"],
                 timestep,
                 source_filter=spec.get("aircraft_source_filter"),
@@ -1115,14 +711,6 @@ class PersistentFullPoolRunner:
                 sigma_pressure_hpa=float(spec.get("aircraft_pressure_weight_sigma_hpa", 15.0)),
                 sigma_distance_cell=float(spec.get("aircraft_distance_weight_sigma_cell", 1.0)),
                 data_sources=spec.get("aircraft_data_sources"),
-            )
-            obs_locs = np.empty((0, 2), dtype=np.float32)
-            obs_vals = np.empty((0,), dtype=np.float32)
-        elif obs_space == "aircraft_superob_grid_split":
-            obs_meta, aircraft_split_grid = self.load_aircraft_superob_grid_split(
-                spec["obs_mode"],
-                timestep,
-                spatial_support=spec.get("aircraft_spatial_support", "global"),
             )
             obs_locs = np.empty((0, 2), dtype=np.float32)
             obs_vals = np.empty((0,), dtype=np.float32)
@@ -1135,8 +723,8 @@ class PersistentFullPoolRunner:
             )
             obs_locs = np.empty((0, 2), dtype=np.float32)
             obs_vals = np.empty((0,), dtype=np.float32)
-        elif obs_space == "surface_superob_grid":
-            obs_meta, surface_grids, surface_masks, surface_channel_indices, obs_count = self.load_surface_metar_superob_grid(
+        elif obs_space == "surface_cell_mean_grid":
+            obs_meta, surface_grids, surface_masks, surface_channel_indices, obs_count = self.load_surface_metar_cell_mean_grid(
                 timestep,
                 variables=spec.get("surface_variables"),
                 aggregation=spec.get("surface_grid_aggregation", "equal"),
@@ -1144,8 +732,8 @@ class PersistentFullPoolRunner:
             )
             obs_locs = np.empty((0, 2), dtype=np.float32)
             obs_vals = np.empty((0,), dtype=np.float32)
-        elif obs_space == "aircraft_surface_superob_grid":
-            aircraft_meta, aircraft_grids, aircraft_masks, aircraft_channel_indices, aircraft_count = self.load_aircraft_superob_grid(
+        elif obs_space == "aircraft_surface_cell_mean_grid":
+            aircraft_meta, aircraft_grids, aircraft_masks, aircraft_channel_indices, aircraft_count = self.load_aircraft_cell_mean_grid(
                 spec["obs_mode"],
                 timestep,
                 source_filter=spec.get("aircraft_source_filter"),
@@ -1155,14 +743,14 @@ class PersistentFullPoolRunner:
                 sigma_distance_cell=float(spec.get("aircraft_distance_weight_sigma_cell", 1.0)),
                 data_sources=spec.get("aircraft_data_sources"),
             )
-            surface_meta, surface_grids, surface_masks, surface_channel_indices, surface_count = self.load_surface_metar_superob_grid(
+            surface_meta, surface_grids, surface_masks, surface_channel_indices, surface_count = self.load_surface_metar_cell_mean_grid(
                 timestep,
                 variables=spec.get("surface_variables"),
                 aggregation=spec.get("surface_grid_aggregation", "equal"),
                 spatial_support=spec.get("surface_spatial_support", "strict_conus"),
             )
             obs_meta = {
-                "obs_space": "aircraft_surface_superob_grid",
+                "obs_space": "aircraft_surface_cell_mean_grid",
                 "aircraft_meta": aircraft_meta,
                 "surface_meta": surface_meta,
             }
@@ -1175,15 +763,12 @@ class PersistentFullPoolRunner:
         else:
             obs_meta, obs_locs, obs_vals = self.load_observation_measurements(spec["obs_mode"], timestep)
 
-        if requested_obs_space != obs_space:
-            obs_meta["paper_obs_space"] = requested_obs_space
-
         if spec["use_igra"]:
             igra_locs, igra_vals = self.load_igra_channels(timestep, variables=spec.get("igra_variables"))
         else:
             igra_locs, igra_vals = empty_channels(len(self.model_vars))
 
-        if self.likelihood_mode == "legacy":
+        if self.likelihood_structure == "single":
             ch_locs = [np.asarray(x, dtype=np.float32) for x in igra_locs]
             ch_vals = [np.asarray(x, dtype=np.float32) for x in igra_vals]
             ch_locs[self.temp_idx] = np.concatenate([ch_locs[self.temp_idx], obs_locs], axis=0)
@@ -1232,16 +817,7 @@ class PersistentFullPoolRunner:
                     if len(surface_vals[i]):
                         ch_locs[i] = np.concatenate([ch_locs[i], surface_locs[i]], axis=0)
                         ch_vals[i] = np.concatenate([ch_vals[i], surface_vals[i]], axis=0)
-            if obs_space in {"aircraft_weighted_sparse_split", "aircraft_simple_sparse_split"}:
-                if spec["obs_modality"] != "aircraft_split":
-                    raise ValueError(f"Experiment {experiment} has split aircraft obs but invalid obs_modality={spec['obs_modality']}")
-                for key, (src_locs, src_vals, src_weights) in aircraft_split_sparse.items():
-                    measurement[key] = self.as_weighted_ensemble_measurement(src_locs, src_vals, src_weights)
-                    for i in range(len(self.model_vars)):
-                        if len(src_vals[i]):
-                            ch_locs[i] = np.concatenate([ch_locs[i], src_locs[i]], axis=0)
-                            ch_vals[i] = np.concatenate([ch_vals[i], src_vals[i]], axis=0)
-            if obs_space == "aircraft_superob_grid":
+            if obs_space == "aircraft_cell_mean_grid":
                 obs_modality = spec["obs_modality"]
                 if obs_modality != "aircraft":
                     raise ValueError(f"Experiment {experiment} has aircraft grid obs but invalid obs_modality={obs_modality}")
@@ -1251,7 +827,7 @@ class PersistentFullPoolRunner:
                     "masks": aircraft_masks,
                     "channel_indices": aircraft_channel_indices,
                 }
-            if obs_space == "aircraft_surface_superob_grid":
+            if obs_space == "aircraft_surface_cell_mean_grid":
                 if spec["obs_modality"] != "aircraft_surface":
                     raise ValueError(
                         f"Experiment {experiment} has aircraft+surface grid obs "
@@ -1269,16 +845,6 @@ class PersistentFullPoolRunner:
                     "masks": surface_masks,
                     "channel_indices": surface_channel_indices,
                 }
-            if obs_space == "aircraft_superob_grid_split":
-                if spec["obs_modality"] != "aircraft_split":
-                    raise ValueError(f"Experiment {experiment} has split aircraft grid obs but invalid obs_modality={spec['obs_modality']}")
-                for key, (src_grids, src_masks, src_channel_indices, _src_count) in aircraft_split_grid.items():
-                    measurement[key] = {
-                        "kind": "multi_grid",
-                        "grids": src_grids,
-                        "masks": src_masks,
-                        "channel_indices": src_channel_indices,
-                    }
             if obs_space in {"surface_weighted_sparse", "surface_simple_sparse"}:
                 obs_modality = spec["obs_modality"]
                 if obs_modality not in {"surface", "metar"}:
@@ -1292,7 +858,7 @@ class PersistentFullPoolRunner:
                     if len(surface_vals[i]):
                         ch_locs[i] = np.concatenate([ch_locs[i], surface_locs[i]], axis=0)
                         ch_vals[i] = np.concatenate([ch_vals[i], surface_vals[i]], axis=0)
-            if obs_space == "surface_superob_grid":
+            if obs_space == "surface_cell_mean_grid":
                 obs_modality = spec["obs_modality"]
                 if obs_modality not in {"surface", "metar"}:
                     raise ValueError(f"Experiment {experiment} has surface grid obs but invalid obs_modality={obs_modality}")
@@ -1306,37 +872,25 @@ class PersistentFullPoolRunner:
                 measurement = None
 
         nonempty = [(self.model_vars[i], len(v)) for i, v in enumerate(ch_vals) if len(v)]
-        if obs_space == "aircraft_superob_grid" and aircraft_masks is not None:
+        if obs_space == "aircraft_cell_mean_grid" and aircraft_masks is not None:
             grid_valid_cells = int(sum(mask.sum() for mask in aircraft_masks))
-        elif obs_space == "aircraft_superob_grid_split" and aircraft_split_grid is not None:
-            grid_valid_cells = int(
-                sum(int(mask.sum()) for grids, masks, indices, count in aircraft_split_grid.values() for mask in masks)
-            )
-        elif obs_space == "surface_superob_grid" and surface_masks is not None:
+        elif obs_space == "surface_cell_mean_grid" and surface_masks is not None:
             grid_valid_cells = int(sum(mask.sum() for mask in surface_masks))
         elif obs_space == "aircraft_surface_sparse":
             aircraft_cells = json.loads(aircraft_meta.get("aircraft_covered_era5_cells_json", "{}"))
             surface_cells = json.loads(surface_meta.get("surface_covered_era5_cells_json", "{}"))
             grid_valid_cells = int(sum(int(v) for v in aircraft_cells.values()))
             grid_valid_cells += int(sum(int(v) for v in surface_cells.values()))
-        elif obs_space == "aircraft_surface_superob_grid":
+        elif obs_space == "aircraft_surface_cell_mean_grid":
             grid_valid_cells = int(sum(mask.sum() for mask in aircraft_masks))
             grid_valid_cells += int(sum(mask.sum() for mask in surface_masks))
         else:
             grid_valid_cells = int(obs_mask.sum()) if obs_mask is not None else 0
         grid_native_points = 0
-        if obs_space in {"aircraft_weighted_sparse", "aircraft_simple_sparse", "aircraft_superob_grid"}:
+        if obs_space in {"aircraft_weighted_sparse", "aircraft_simple_sparse", "aircraft_cell_mean_grid"}:
             aircraft_counts = json.loads(obs_meta.get("aircraft_counts_json", "{}"))
             grid_native_points = int(sum(int(v) for v in aircraft_counts.values()))
-        elif obs_space == "aircraft_weighted_sparse_split" and aircraft_split_sparse is not None:
-            grid_native_points = int(
-                sum(len(vals[i]) for locs, vals, weights in aircraft_split_sparse.values() for i in range(len(vals)))
-            )
-        elif obs_space == "aircraft_superob_grid_split" and aircraft_split_grid is not None:
-            grid_native_points = int(
-                sum(int(count.sum()) for grids, masks, indices, count in aircraft_split_grid.values())
-            )
-        elif obs_space in {"surface_weighted_sparse", "surface_simple_sparse", "surface_superob_grid"}:
+        elif obs_space in {"surface_weighted_sparse", "surface_simple_sparse", "surface_cell_mean_grid"}:
             surface_counts = json.loads(obs_meta.get("surface_counts_json", "{}"))
             grid_native_points = int(sum(int(v) for v in surface_counts.values()))
         elif obs_space == "aircraft_surface_sparse":
@@ -1344,7 +898,7 @@ class PersistentFullPoolRunner:
             surface_counts = json.loads(surface_meta.get("surface_counts_json", "{}"))
             grid_native_points = int(sum(int(v) for v in aircraft_counts.values()))
             grid_native_points += int(sum(int(v) for v in surface_counts.values()))
-        elif obs_space == "aircraft_surface_superob_grid":
+        elif obs_space == "aircraft_surface_cell_mean_grid":
             aircraft_counts = json.loads(obs_meta["aircraft_meta"].get("aircraft_counts_json", "{}"))
             surface_counts = json.loads(obs_meta["surface_meta"].get("surface_counts_json", "{}"))
             grid_native_points = int(sum(int(v) for v in aircraft_counts.values()))
@@ -1352,7 +906,7 @@ class PersistentFullPoolRunner:
         io.log0(
             f"Observation summary | experiment={experiment} obs_points={len(obs_vals)} "
             f"grid_valid_cells={grid_valid_cells} grid_native_points={grid_native_points} "
-            f"likelihood_mode={self.likelihood_mode} nonempty_channels={len(nonempty)} "
+            f"likelihood_structure={self.likelihood_structure} nonempty_channels={len(nonempty)} "
             f"total_condition_points={sum(n for _, n in nonempty)}"
         )
 
@@ -1402,7 +956,7 @@ class PersistentFullPoolRunner:
             channel_names=np.asarray(self.model_vars),
             channel_counts=np.asarray([len(v) for v in ch_vals], dtype=np.int64),
             obs_points=np.asarray(len(obs_vals), dtype=np.int64),
-            obs_space=np.asarray(requested_obs_space),
+            obs_space=np.asarray(obs_space),
             grid_valid_cells=np.asarray(grid_valid_cells, dtype=np.int64),
             grid_native_points=np.asarray(grid_native_points, dtype=np.int64),
             grid_count=np.asarray(obs_count if obs_count is not None else np.zeros((0,), dtype=np.int64), dtype=np.int64),
@@ -1412,7 +966,7 @@ class PersistentFullPoolRunner:
             surface_channel_indices=np.asarray(surface_channel_indices if surface_channel_indices is not None else np.zeros((0,), dtype=np.int64), dtype=np.int64),
             surface_grid_masks=np.asarray(surface_masks if surface_masks is not None else np.zeros((0,), dtype=bool), dtype=bool),
             obs_meta_json=np.asarray(json.dumps(obs_meta, sort_keys=True)),
-            likelihood_mode=np.asarray(self.likelihood_mode),
+            likelihood_structure=np.asarray(self.likelihood_structure),
             likelihood_kwargs_json=np.asarray(json.dumps(self.likelihood_kwargs, sort_keys=True)),
         )
         io.log0(f"Saved samples to {output} shape={out_array.shape}")
@@ -1423,169 +977,3 @@ class PersistentFullPoolRunner:
         for timestep in timesteps:
             for experiment in experiments:
                 self.run_one(experiment=experiment, timestep=int(timestep), overwrite=overwrite)
-
-
-def write_run_manifest(output_root: str, args: argparse.Namespace, timesteps: List[int], experiments: List[str]) -> None:
-    os.makedirs(output_root, exist_ok=True)
-    manifest = {
-        "created_utc": datetime.utcnow().isoformat() + "Z",
-        "script": os.environ.get("IGRA_RUNNER_ENTRYPOINT", os.path.abspath(__file__)),
-        "output_root": output_root,
-        "samples_root": os.path.join(output_root, "samples"),
-        "experiments": experiments,
-        "experiment_definitions": EXPERIMENTS,
-        "timesteps": timesteps,
-        "ens": args.ens,
-        "num_steps": args.num_steps,
-        "seed": args.seed,
-        "checkpoint": args.checkpoint,
-        "era5_root": args.era5_root,
-        "era5_split": args.era5_split,
-        "calendar_year": args.calendar_year,
-        "hydra_cfg": args.hydra_cfg,
-        "num_channels": args.num_channels,
-        "aircraft_around5_root": args.aircraft_around5_root,
-        "aircraft_around25_root": args.aircraft_around25_root,
-        "surface_metar_root": args.surface_metar_root,
-        "igra_pkl": args.igra_pkl,
-        "aircraft_clean_root": args.aircraft_clean_root,
-        "aircraft_mid_root": args.aircraft_mid_root,
-        "likelihood_mode": args.likelihood_mode,
-        "likelihood_params": {
-            "std_igra": args.std_igra,
-            "gamma_igra": args.gamma_igra,
-            "lambda_igra": args.lambda_igra,
-            "std_aircraft": args.std_aircraft,
-            "gamma_aircraft": args.gamma_aircraft,
-            "lambda_aircraft": args.lambda_aircraft,
-            "std_surface": args.std_surface,
-            "gamma_surface": args.gamma_surface,
-            "lambda_surface": args.lambda_surface,
-            "std_aircraft_acars": args.std_aircraft_acars,
-            "gamma_aircraft_acars": args.gamma_aircraft_acars,
-            "lambda_aircraft_acars": args.lambda_aircraft_acars,
-            "std_aircraft_profiles": args.std_aircraft_profiles,
-            "gamma_aircraft_profiles": args.gamma_aircraft_profiles,
-            "lambda_aircraft_profiles": args.lambda_aircraft_profiles,
-        },
-        "slurm_job_id": os.environ.get("SLURM_JOB_ID", ""),
-        "notes": "Persistent runner for MADIS aircraft observations. In multimodal mode, IGRA and aircraft are separate likelihood terms.",
-    }
-    with open(os.path.join(output_root, "manifest.json"), "w", encoding="utf-8") as f:
-        json.dump(manifest, f, indent=2, sort_keys=True)
-
-
-def main():
-    parser = argparse.ArgumentParser(description="Persistent MADIS aircraft posterior runner")
-    parser.add_argument("--output_root", required=True)
-    parser.add_argument(
-        "--experiments",
-        default="igra_only,igra_all13_aircraft_clean_v2,igra_all13_aircraft_clean_v3,igra_all13_aircraft_mid_v2,igra_all13_aircraft_mid_v3",
-        help=f"Comma-separated experiment names. Choices: {','.join(EXPERIMENTS)}",
-    )
-    parser.add_argument(
-        "--timesteps",
-        default="default16",
-        help="Comma/range list, e.g. 0-3,364-367, or 'default16'/'first20'/'first20_12h'.",
-    )
-    parser.add_argument("--ens", type=int, default=16)
-    parser.add_argument("--seed", type=int, default=17)
-    parser.add_argument("--num_steps", type=int, default=50)
-    parser.add_argument("--sigma_min", type=float, default=0.005)
-    parser.add_argument("--sigma_max", type=float, default=80.0)
-    parser.add_argument("--rho", type=float, default=7.0)
-    parser.add_argument("--S_churn", type=float, default=0.0)
-    parser.add_argument("--S_min", type=float, default=0.01)
-    parser.add_argument("--S_max", type=float, default=50.0)
-    parser.add_argument("--S_noise", type=float, default=1.003)
-    parser.add_argument("--aircraft_around5_root", default=AIRCRAFT_AROUND5_ROOT)
-    parser.add_argument("--aircraft_around25_root", default=AIRCRAFT_AROUND25_ROOT)
-    parser.add_argument("--surface_metar_root", default=SURFACE_METAR_ROOT)
-    parser.add_argument("--aircraft_clean_root", default=AIRCRAFT_CLEAN_ROOT)
-    parser.add_argument("--aircraft_mid_root", default=AIRCRAFT_MID_ROOT)
-    parser.add_argument("--igra_pkl", default=IGRA_PKL)
-    parser.add_argument("--checkpoint", default=DEFAULT_CHECKPOINT)
-    parser.add_argument("--era5_root", default=ERA5_ROOT)
-    parser.add_argument("--era5_split", default="test")
-    parser.add_argument("--calendar_year", type=int, default=2020)
-    parser.add_argument("--hydra_cfg", default=HYDRA_CFG)
-    parser.add_argument("--num_channels", type=int, default=NUM_CHANNELS)
-    parser.add_argument("--likelihood_mode", choices=["legacy", "multimodal"], default="multimodal")
-    parser.add_argument("--std_igra", type=float, default=5e-4)
-    parser.add_argument("--gamma_igra", type=float, default=2e-6)
-    parser.add_argument("--lambda_igra", type=float, default=1.0)
-    parser.add_argument("--std_aircraft", type=float, default=5e-4)
-    parser.add_argument("--gamma_aircraft", type=float, default=2e-6)
-    parser.add_argument("--lambda_aircraft", type=float, default=1.0)
-    parser.add_argument("--std_surface", type=float, default=5e-4)
-    parser.add_argument("--gamma_surface", type=float, default=2e-6)
-    parser.add_argument("--lambda_surface", type=float, default=1.0)
-    parser.add_argument("--std_aircraft_acars", type=float, default=None)
-    parser.add_argument("--gamma_aircraft_acars", type=float, default=None)
-    parser.add_argument("--lambda_aircraft_acars", type=float, default=None)
-    parser.add_argument("--std_aircraft_profiles", type=float, default=None)
-    parser.add_argument("--gamma_aircraft_profiles", type=float, default=None)
-    parser.add_argument("--lambda_aircraft_profiles", type=float, default=None)
-    parser.add_argument("--overwrite", action="store_true")
-    args = parser.parse_args()
-
-    experiments = [x.strip() for x in args.experiments.split(",") if x.strip()]
-    unknown = sorted(set(experiments) - set(EXPERIMENTS))
-    if unknown:
-        raise ValueError(f"Unknown experiments: {unknown}; choices={sorted(EXPERIMENTS)}")
-    if args.timesteps == "default16":
-        timesteps = default_timesteps_16()
-    elif args.timesteps == "first20":
-        timesteps = default_timesteps_first20()
-    elif args.timesteps == "first20_12h":
-        timesteps = default_timesteps_first20_12h()
-    else:
-        timesteps = parse_timesteps(args.timesteps)
-    write_run_manifest(args.output_root, args, timesteps, experiments)
-
-    runner = PersistentFullPoolRunner(
-        output_root=args.output_root,
-        ens=args.ens,
-        seed=args.seed,
-        num_steps=args.num_steps,
-        sigma_min=args.sigma_min,
-        sigma_max=args.sigma_max,
-        rho=args.rho,
-        S_churn=args.S_churn,
-        S_min=args.S_min,
-        S_max=args.S_max,
-        S_noise=args.S_noise,
-        igra_pkl=args.igra_pkl,
-        aircraft_around5_root=args.aircraft_around5_root,
-        aircraft_around25_root=args.aircraft_around25_root,
-        aircraft_clean_root=args.aircraft_clean_root,
-        aircraft_mid_root=args.aircraft_mid_root,
-        surface_metar_root=args.surface_metar_root,
-        checkpoint=args.checkpoint,
-        era5_root=args.era5_root,
-        hydra_cfg=args.hydra_cfg,
-        num_channels=args.num_channels,
-        likelihood_mode=args.likelihood_mode,
-        std_igra=args.std_igra,
-        gamma_igra=args.gamma_igra,
-        lambda_igra=args.lambda_igra,
-        std_aircraft=args.std_aircraft,
-        gamma_aircraft=args.gamma_aircraft,
-        lambda_aircraft=args.lambda_aircraft,
-        std_surface=args.std_surface,
-        gamma_surface=args.gamma_surface,
-        lambda_surface=args.lambda_surface,
-        std_aircraft_acars=args.std_aircraft_acars,
-        gamma_aircraft_acars=args.gamma_aircraft_acars,
-        lambda_aircraft_acars=args.lambda_aircraft_acars,
-        std_aircraft_profiles=args.std_aircraft_profiles,
-        gamma_aircraft_profiles=args.gamma_aircraft_profiles,
-        lambda_aircraft_profiles=args.lambda_aircraft_profiles,
-        era5_split=args.era5_split,
-        calendar_year=args.calendar_year,
-    )
-    runner.run_many(experiments=experiments, timesteps=timesteps, overwrite=args.overwrite)
-
-
-if __name__ == "__main__":
-    main()

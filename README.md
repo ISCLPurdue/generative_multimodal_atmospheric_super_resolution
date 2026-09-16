@@ -1,6 +1,6 @@
 # Generative Atmospheric Super-Resolution across Heterogeneous Observing Systems through Composable Interfaces
 
-[Release v1.0.2](https://github.com/ISCLPurdue/generative_multimodal_atmospheric_super_resolution/releases/tag/v1.0.2)
+**Release candidate v1.0.3**
 · [Data and model inputs](DATA.md)
 · [Reproduction](reproduction/README.md)
 · [Reported analyses](analysis/README.md)
@@ -67,9 +67,9 @@ conditioning. Negative values indicate lower RMSE.*
 |---|---|
 | Run the 2020 experiments | [`reproduction/`](reproduction/README.md) |
 | Prepare the required inputs | [`DATA.md`](DATA.md) |
-| Reproduce reported analyses | [`analysis/`](analysis/README.md) |
+| Inspect reported analyses and compact outputs | [`analysis/`](analysis/README.md) |
 | Inspect the sampler and observation interfaces | [`src/igra_gen/`](src/igra_gen/) |
-| Inspect preprocessing and interface-development scripts | [`scripts/`](scripts/) |
+| Inspect observation-preprocessing scripts | [`scripts/`](scripts/) |
 | Run configuration and paper-alignment checks | [`tests/`](tests/) |
 
 ## Quick start
@@ -110,19 +110,21 @@ and the fixed annual and held-out evaluation times are recorded under
 the posterior-sampling stage; downstream scripts and compact numerical
 summaries are documented under [`analysis/`](analysis/README.md).
 
+The repository includes the inference architecture and resolved configuration
+for the fixed atmospheric prior used in the study, but not its original
+training pipeline. The pretrained checkpoint is an external input.
+
 ## Citation
 
 Citation metadata are provided in [`CITATION.cff`](CITATION.cff). For a fixed
-software snapshot, please cite the
-[`v1.0.2` release](https://github.com/ISCLPurdue/generative_multimodal_atmospheric_super_resolution/releases/tag/v1.0.2).
+software snapshot, please cite the GitHub release associated with the version
+used.
 The associated manuscript citation will be added after the preprint is posted.
 This repository does not require a Zenodo DOI.
 
 ## License
 
-Third-party code embedded in individual source files retains its original
-copyright and license notices. No project-wide license has yet been assigned;
-all rights not covered by those notices are reserved by the authors.
+No project-wide license has been assigned.
 
 ## Acknowledgments
 

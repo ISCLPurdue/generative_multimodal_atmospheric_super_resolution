@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Moving-block bootstrap for the 2019-frozen R+A+S 2020 validation.
+"""Moving-block bootstrap for the selected R+A+S interface in 2020.
 
 The observation interfaces were selected using 2019 development data and are
 evaluated on the full set of 723 matched 2020 analysis times. The bootstrap
@@ -20,23 +20,20 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 
+from analysis_paths import output_path, required_path
 
-ROOT = Path("/depot/rmaulik/data/yangxu")
-REPORT_DIR = (
-    ROOT
-    / "reports/2026/07262026report/20260726__frozen2019_RAS_fullyear2020_analysis"
-)
+REPORT_DIR = output_path("ANNUAL_RMSE_OUTPUT_ROOT", "annual_rmse")
 TABLE_DIR = REPORT_DIR / "tables"
 FIG_DIR = REPORT_DIR / "figures"
-SOURCE_CSV = TABLE_DIR / "frozen2019_RAS_metrics_by_timestep_variable.csv"
+SOURCE_CSV = required_path("ANNUAL_RMSE_TIMESTEP_METRICS_CSV")
 
 SEED = 20260726
 BOOTSTRAP_REPLICATES = 10_000
 BLOCK_DAYS_TO_CASES = {3: 6, 7: 14, 14: 28}
 CALENDAR_TIMESTEPS = list(range(0, 1464, 2))
 
-PROTOCOL = "RplusAplusS_2019_frozen"
-PROTOCOL_LABEL = "R+A+S (2019-frozen)"
+PROTOCOL = "RplusAplusS_selected_2019"
+PROTOCOL_LABEL = "R+A+S (selected with 2019 data)"
 REGIONS = ["strict_conus", "global", "global_excluding_strict_conus"]
 REGION_LABELS = {
     "strict_conus": "Within CONUS",
@@ -130,13 +127,13 @@ def build_calendar(valid_timesteps: list[int]) -> pd.DataFrame:
     calendar["datetime_utc"] = pd.Timestamp("2020-01-01T00:00:00Z") + pd.to_timedelta(
         calendar["slot_index"] * 12, unit="h"
     )
-    calendar["effect_available_full723"] = calendar["timestep"].isin(valid)
+    calendar["effect_available"] = calendar["timestep"].isin(valid)
     calendar["slot_status"] = np.where(
-        calendar["effect_available_full723"], "effect_available", "baseline_unavailable"
+        calendar["effect_available"], "effect_available", "baseline_unavailable"
     )
-    if int(calendar["effect_available_full723"].sum()) != 723:
-        raise ValueError("Calendar availability does not match full723")
-    calendar.to_csv(TABLE_DIR / "calendar_grid_2020_12h_full723.csv", index=False)
+    if int(calendar["effect_available"].sum()) != 723:
+        raise ValueError("Calendar availability does not match the 723 evaluation times")
+    calendar.to_csv(TABLE_DIR / "calendar_grid_2020_12h.csv", index=False)
     return calendar
 
 
@@ -174,7 +171,7 @@ def build_effect_series(df: pd.DataFrame) -> pd.DataFrame:
     series = pd.concat(rows, ignore_index=True)
     series["protocol"] = PROTOCOL
     series["display"] = PROTOCOL_LABEL
-    series.to_csv(TABLE_DIR / "paired_effect_timeseries_full723.csv", index=False)
+    series.to_csv(TABLE_DIR / "paired_effect_timeseries.csv", index=False)
     return series
 
 
@@ -270,20 +267,20 @@ def summarize_effects(series: pd.DataFrame) -> tuple[pd.DataFrame, np.ndarray, n
             "variable_set_label": first.get("variable_set_label", ""),
             "variable": first.get("variable", ""),
             "var_short": first.get("var_short", ""),
-            "n_full723": len(effects),
-            "mean_effect_pct_full723": float(np.mean(effects)),
-            "median_effect_pct_full723": float(np.median(effects)),
-            "fraction_timesteps_improved_full723": float(np.mean(effects < 0.0)),
-            "lag1_autocorrelation_full723": rho1,
-            "lag1_exact_12h_pair_count_full723": pair_count,
-            "ar1_n_eff_raw_full723": neff_raw,
-            "ar1_n_eff_capped_full723": neff_capped,
+            "n_evaluation_times": len(effects),
+            "mean_effect_pct": float(np.mean(effects)),
+            "median_effect_pct": float(np.median(effects)),
+            "fraction_analysis_times_improved": float(np.mean(effects < 0.0)),
+            "lag1_autocorrelation": rho1,
+            "lag1_exact_12h_pair_count": pair_count,
+            "ar1_n_eff_raw": neff_raw,
+            "ar1_n_eff_capped": neff_capped,
         }
         rows.append(row)
         matrices.append(effects)
         metadata.append(row)
     summary = pd.DataFrame(rows)
-    summary.to_csv(TABLE_DIR / "paired_effect_summary_full723.csv", index=False)
+    summary.to_csv(TABLE_DIR / "paired_effect_summary.csv", index=False)
     matrix = np.vstack(matrices)
     return summary, matrix, np.array(sorted(series["timestep"].unique()), dtype=np.int64), metadata
 
@@ -291,7 +288,7 @@ def summarize_effects(series: pd.DataFrame) -> tuple[pd.DataFrame, np.ndarray, n
 def run_bootstrap(effect_summary: pd.DataFrame, matrix: np.ndarray, timesteps: np.ndarray, calendar: pd.DataFrame) -> pd.DataFrame:
     slot_lookup = {int(t): int(s) for s, t in zip(calendar["slot_index"], calendar["timestep"])}
     retained_slots = np.array([slot_lookup[int(t)] for t in timesteps], dtype=np.int64)
-    valid_mask = calendar["effect_available_full723"].to_numpy(dtype=bool)
+    valid_mask = calendar["effect_available"].to_numpy(dtype=bool)
     rng_master = np.random.default_rng(SEED)
     rows = []
     replicate_payload = {}
@@ -299,7 +296,7 @@ def run_bootstrap(effect_summary: pd.DataFrame, matrix: np.ndarray, timesteps: n
         rng = np.random.default_rng(rng_master.integers(0, 2**63 - 1))
         means, start_counts, effect_counts = bootstrap_matrix(matrix, retained_slots, valid_mask, block_cases, rng)
         replicate_payload[f"block_{block_days}day"] = means
-        sample_mean = effect_summary["mean_effect_pct_full723"].to_numpy(dtype=np.float64)
+        sample_mean = effect_summary["mean_effect_pct"].to_numpy(dtype=np.float64)
         boot_center = means.mean(axis=0)
         ci_low = np.percentile(means, 2.5, axis=0)
         ci_high = np.percentile(means, 97.5, axis=0)
@@ -346,18 +343,18 @@ def run_bootstrap(effect_summary: pd.DataFrame, matrix: np.ndarray, timesteps: n
             }
         ).to_csv(TABLE_DIR / f"calendar_block_coverage_{block_days}day.csv", index=False)
     np.savez_compressed(
-        TABLE_DIR / "bootstrap_mean_replicates_full723.npz",
+        TABLE_DIR / "bootstrap_mean_replicates.npz",
         **replicate_payload,
         series_id=effect_summary["series_id"].to_numpy(dtype=str),
     )
     out = pd.DataFrame(rows)
-    out.to_csv(TABLE_DIR / "serial_correlation_block_bootstrap_summary_full723.csv", index=False)
+    out.to_csv(TABLE_DIR / "moving_block_bootstrap_summary.csv", index=False)
     primary = out[out["block_days"].eq(14)].copy()
     primary[primary["analysis_scope"].eq("aggregate_set")].to_csv(
-        TABLE_DIR / "aggregate_protocol_region_14day_summary_full723.csv", index=False
+        TABLE_DIR / "annual_rmse_14day_intervals_by_region.csv", index=False
     )
     primary[primary["analysis_scope"].eq("per_variable")].to_csv(
-        TABLE_DIR / "per_variable_14day_summary_full723.csv", index=False
+        TABLE_DIR / "annual_rmse_14day_intervals_by_variable.csv", index=False
     )
     return out
 
@@ -373,11 +370,11 @@ def plot_aggregate(primary: pd.DataFrame) -> None:
         for j, varset in enumerate(VARIABLE_SETS):
             row = sub[sub["variable_set"].eq(varset)].iloc[0]
             ax.errorbar(
-                row["mean_effect_pct_full723"],
+                row["mean_effect_pct"],
                 j,
                 xerr=[
-                    [row["mean_effect_pct_full723"] - row["ci95_primary_low_pct"]],
-                    [row["ci95_primary_high_pct"] - row["mean_effect_pct_full723"]],
+                    [row["mean_effect_pct"] - row["ci95_primary_low_pct"]],
+                    [row["ci95_primary_high_pct"] - row["mean_effect_pct"]],
                 ],
                 fmt=marker[varset],
                 markersize=7,
@@ -392,9 +389,9 @@ def plot_aggregate(primary: pd.DataFrame) -> None:
         ax.grid(axis="x", color="#d8dee9", alpha=0.85)
     axes[0].set_yticks(np.arange(len(VARIABLE_SETS)))
     axes[0].set_yticklabels([VARIABLE_SET_LABELS[k] for k in VARIABLE_SETS], fontsize=12)
-    fig.suptitle("2019-frozen R+A+S: 14-day moving-block bootstrap over 2020 full723", weight="bold", fontsize=16)
-    fig.savefig(FIG_DIR / "frozen2019_RAS_14day_block_bootstrap_aggregate.png", dpi=260)
-    fig.savefig(FIG_DIR / "frozen2019_RAS_14day_block_bootstrap_aggregate.pdf")
+    fig.suptitle("R+A+S selected with 2019 data: 14-day moving-block bootstrap over 2020", weight="bold", fontsize=16)
+    fig.savefig(FIG_DIR / "selected_RAS_14day_block_bootstrap_aggregate.png", dpi=260)
+    fig.savefig(FIG_DIR / "selected_RAS_14day_block_bootstrap_aggregate.pdf")
     plt.close(fig)
 
 
@@ -409,11 +406,11 @@ def plot_per_variable(primary: pd.DataFrame) -> None:
     y = np.arange(len(data))
     fig, ax = plt.subplots(figsize=(8.2, 7.8), constrained_layout=True)
     ax.errorbar(
-        data["mean_effect_pct_full723"],
+        data["mean_effect_pct"],
         y,
         xerr=[
-            data["mean_effect_pct_full723"] - data["ci95_primary_low_pct"],
-            data["ci95_primary_high_pct"] - data["mean_effect_pct_full723"],
+            data["mean_effect_pct"] - data["ci95_primary_low_pct"],
+            data["ci95_primary_high_pct"] - data["mean_effect_pct"],
         ],
         fmt="D",
         markersize=5.2,
@@ -429,8 +426,8 @@ def plot_per_variable(primary: pd.DataFrame) -> None:
     ax.set_xlabel("Mean RMSE change and 95% CI (%)")
     ax.set_title("Strict CONUS per-variable 14-day block robustness", weight="bold")
     ax.grid(axis="x", color="#d8dee9", alpha=0.85)
-    fig.savefig(FIG_DIR / "frozen2019_RAS_14day_block_bootstrap_strict_conus_per_variable.png", dpi=260)
-    fig.savefig(FIG_DIR / "frozen2019_RAS_14day_block_bootstrap_strict_conus_per_variable.pdf")
+    fig.savefig(FIG_DIR / "selected_RAS_14day_block_bootstrap_conus_per_variable.png", dpi=260)
+    fig.savefig(FIG_DIR / "selected_RAS_14day_block_bootstrap_conus_per_variable.pdf")
     plt.close(fig)
 
 
@@ -439,9 +436,9 @@ def write_readme(bootstrap: pd.DataFrame) -> None:
     agg = primary[primary["analysis_scope"].eq("aggregate_set")]
     strict = agg[agg["region"].eq("strict_conus")]
     lines = [
-        "# 2019-Frozen R+A+S Full723 Moving-Block Bootstrap",
+        "# R+A+S Moving-Block Bootstrap",
         "",
-        "This report is the serial-correlation robustness analysis for the final 2019-frozen composed protocol applied to 2020.",
+        "This report evaluates serial-correlation robustness for the R+A+S interface selected with 2019 development data and applied to 2020.",
         "",
         "This uses all 723 matched 2020 cases because the observation interfaces were selected with 2019 development data. The 2020 calendar has 732 12-hour slots; the 9 unmatched slots remain explicit gaps.",
         "",
@@ -451,7 +448,7 @@ def write_readme(bootstrap: pd.DataFrame) -> None:
     for varset in VARIABLE_SETS:
         row = strict[strict["variable_set"].eq(varset)].iloc[0]
         lines.append(
-            f"- Strict CONUS {VARIABLE_SET_LABELS[varset]}: {row['mean_effect_pct_full723']:+.3f}% "
+            f"- Strict CONUS {VARIABLE_SET_LABELS[varset]}: {row['mean_effect_pct']:+.3f}% "
             f"[{row['ci95_primary_low_pct']:+.3f}, {row['ci95_primary_high_pct']:+.3f}], "
             f"P(effect < 0)={row['probability_effect_lt_zero']:.4f}."
         )
@@ -459,19 +456,19 @@ def write_readme(bootstrap: pd.DataFrame) -> None:
     lines.extend(
         [
             "",
-            f"- Outside CONUS all13: {rest['mean_effect_pct_full723']:+.4f}% "
+            f"- Outside CONUS all13: {rest['mean_effect_pct']:+.4f}% "
             f"[{rest['ci95_primary_low_pct']:+.4f}, {rest['ci95_primary_high_pct']:+.4f}].",
             "",
             "## Outputs",
             "",
-            f"- Full bootstrap summary: `{TABLE_DIR / 'serial_correlation_block_bootstrap_summary_full723.csv'}`",
-            f"- 14-day aggregate table: `{TABLE_DIR / 'aggregate_protocol_region_14day_summary_full723.csv'}`",
-            f"- 14-day per-variable table: `{TABLE_DIR / 'per_variable_14day_summary_full723.csv'}`",
+            f"- Full bootstrap summary: `{TABLE_DIR / 'moving_block_bootstrap_summary.csv'}`",
+            f"- 14-day aggregate table: `{TABLE_DIR / 'annual_rmse_14day_intervals_by_region.csv'}`",
+            f"- 14-day per-variable table: `{TABLE_DIR / 'annual_rmse_14day_intervals_by_variable.csv'}`",
             f"- Figures: `{FIG_DIR}`",
             "",
         ]
     )
-    (REPORT_DIR / "README_block_bootstrap_full723.md").write_text("\n".join(lines), encoding="utf-8")
+    (REPORT_DIR / "README_moving_block_bootstrap.md").write_text("\n".join(lines), encoding="utf-8")
 
 
 def main() -> None:
@@ -492,7 +489,7 @@ def main() -> None:
         ][
             [
                 "variable_set",
-                "mean_effect_pct_full723",
+                "mean_effect_pct",
                 "ci95_primary_low_pct",
                 "ci95_primary_high_pct",
                 "probability_effect_lt_zero",

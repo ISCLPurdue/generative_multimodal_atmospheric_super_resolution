@@ -10,16 +10,11 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 
+from analysis_paths import required_path
 
-ROOT = Path("/depot/rmaulik/data/yangxu")
 VERSION_ROOT = Path(__file__).resolve().parents[1]
 FIGURE_DIR = VERSION_ROOT / "figures"
-SUMMARY = (
-    ROOT
-    / "reports/2026/07232026report"
-    / "20260723__2019_structural_selection_strat24_analysis"
-    / "tables/structural_summary_all_regions.csv"
-)
+SUMMARY = required_path("INTERFACE_DESIGN_SUMMARY_CSV")
 
 
 def configure_style() -> None:
@@ -140,7 +135,7 @@ def main() -> None:
     axis.spines["right"].set_visible(False)
 
     FIGURE_DIR.mkdir(parents=True, exist_ok=True)
-    stem = "figure15_surface_station_residual_representation_grouped_bar_v145"
+    stem = "figure15_surface_station_residual_representation_grouped_bar"
     pdf_path = FIGURE_DIR / f"{stem}.pdf"
     png_path = FIGURE_DIR / f"{stem}.png"
     figure.savefig(pdf_path, bbox_inches="tight", facecolor="white")

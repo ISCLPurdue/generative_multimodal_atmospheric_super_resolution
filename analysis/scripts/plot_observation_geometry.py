@@ -1,19 +1,12 @@
 #!/usr/bin/env python3
-"""Plot polished common-bin annual R/A/S observation distributions.
-
-The layout retains the comfortable overall proportions of the v111 preview,
-while the typography, map spacing, CONUS annotation, and shared colorbar are
-drawn together so they remain visually consistent at manuscript size.
-"""
+"""Plot annual R/A/S observation distributions using common spatial bins."""
 
 from __future__ import annotations
 
+import argparse
 import csv
-import os
 import pickle
 from pathlib import Path
-
-os.environ.setdefault("MPLCONFIGDIR", "/home/xu2279/.tmp/matplotlib")
 
 import matplotlib
 
@@ -23,29 +16,77 @@ import matplotlib.patches as patches
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
-
-from replot_observation_geometry_annual_v111 import (
-    ABO_COUNTS,
-    CONUS,
-    IGRA_PKL,
-    METAR_INVENTORY,
-    SHP,
-    draw_basemap,
-    draw_conus_domain,
-    new_figure,
-    read_polygon_shp,
-    style_axes,
-    style_colorbar,
-    style_legend,
-)
+import shapefile
 
 
 VERSION_ROOT = Path(__file__).resolve().parents[1]
 FIG_DIR = VERSION_ROOT / "figures"
 TABLE_DIR = VERSION_ROOT / "tables"
+CONUS = (24.0, 50.0, -125.0, -66.0)
 BIN_WIDTH_DEG = 0.5
 MAP_YLIM = (-60.0, 80.0)
 COMMON_COLOR_LABEL = "log10 annual observation count per 0.5° bin"
+
+
+def read_polygon_shp(path: Path) -> list[np.ndarray]:
+    """Return polygon segments from a Natural Earth-style shapefile."""
+    segments: list[np.ndarray] = []
+    with shapefile.Reader(str(path)) as reader:
+        for shape in reader.shapes():
+            points = np.asarray(shape.points, dtype=np.float64)
+            boundaries = list(shape.parts) + [len(points)]
+            for start, stop in zip(boundaries[:-1], boundaries[1:]):
+                if stop - start >= 2:
+                    segments.append(points[start:stop])
+    return segments
+
+
+def draw_basemap(ax: plt.Axes, segments: list[np.ndarray]) -> None:
+    for segment in segments:
+        ax.plot(segment[:, 0], segment[:, 1], color="#707070", linewidth=0.45, zorder=1)
+
+
+def draw_conus_domain(ax: plt.Axes) -> None:
+    lat0, lat1, lon0, lon1 = CONUS
+    ax.add_patch(
+        patches.Rectangle(
+            (lon0, lat0),
+            lon1 - lon0,
+            lat1 - lat0,
+            fill=False,
+            linestyle=(0, (5, 3)),
+            linewidth=1.15,
+            edgecolor="#303030",
+            label="CONUS domain",
+            zorder=4,
+        )
+    )
+
+
+def new_figure(*, with_colorbar: bool) -> tuple[plt.Figure, plt.Axes, plt.Axes | None]:
+    fig = plt.figure(figsize=(7.0, 3.55), facecolor="white")
+    ax = fig.add_axes([0.08, 0.16, 0.78 if with_colorbar else 0.88, 0.72])
+    cax = fig.add_axes([0.89, 0.16, 0.025, 0.72]) if with_colorbar else None
+    return fig, ax, cax
+
+
+def style_axes(ax: plt.Axes, title: str) -> None:
+    ax.set_xlim(-180.0, 180.0)
+    ax.set_ylim(*MAP_YLIM)
+    ax.set_xlabel("Longitude", fontfamily="Nimbus Sans")
+    ax.set_ylabel("Latitude", fontfamily="Nimbus Sans")
+    ax.set_title(title, fontsize=14, fontfamily="Nimbus Sans", pad=8)
+    ax.tick_params(axis="both", labelsize=9, width=0.8, length=3.5)
+
+
+def style_colorbar(colorbar, label: str) -> None:
+    colorbar.set_label(label, fontsize=10.5, labelpad=8, fontfamily="Nimbus Sans")
+    colorbar.ax.tick_params(labelsize=9, width=0.8, length=3.5)
+    colorbar.outline.set_linewidth(0.7)
+
+
+def style_legend(ax: plt.Axes) -> None:
+    ax.legend(loc="lower left", fontsize=8.5, frameon=True, framealpha=0.9)
 
 
 def bin_centers(lat: np.ndarray, lon: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
@@ -64,8 +105,8 @@ def restrict_to_map(frame: pd.DataFrame) -> pd.DataFrame:
     ].copy()
 
 
-def load_radiosonde_bins() -> pd.DataFrame:
-    with IGRA_PKL.open("rb") as handle:
+def load_radiosonde_bins(igra_pkl: Path) -> pd.DataFrame:
+    with igra_pkl.open("rb") as handle:
         data = pickle.load(handle)
     rows: list[tuple[float, float]] = []
     for timestep in range(0, len(data), 2):
@@ -86,13 +127,13 @@ def load_radiosonde_bins() -> pd.DataFrame:
     return restrict_to_map(frame)
 
 
-def load_aircraft_bins() -> pd.DataFrame:
-    frame = pd.read_csv(ABO_COUNTS).rename(columns={"n_obs_records": "count"})
+def load_aircraft_bins(aircraft_counts: Path) -> pd.DataFrame:
+    frame = pd.read_csv(aircraft_counts).rename(columns={"n_obs_records": "count"})
     return restrict_to_map(frame[["lat", "lon", "count"]])
 
 
-def load_surface_bins() -> pd.DataFrame:
-    stations = pd.read_csv(METAR_INVENTORY)
+def load_surface_bins(surface_inventory: Path) -> pd.DataFrame:
+    stations = pd.read_csv(surface_inventory)
     lat_bin, lon_bin = bin_centers(stations["lat"].to_numpy(), stations["lon"].to_numpy())
     frame = pd.DataFrame(
         {"lat": lat_bin, "lon": lon_bin, "count": stations["n_obs_records"].to_numpy()}
@@ -126,6 +167,7 @@ def save_panel(
     draw_conus_domain(ax)
     style_axes(ax, title)
     style_legend(ax)
+    assert cax is not None
     colorbar = fig.colorbar(scatter, cax=cax)
     style_colorbar(colorbar, COMMON_COLOR_LABEL)
     output = FIG_DIR / filename
@@ -160,9 +202,8 @@ def save_shared_colorbar_figure(
     }
     marker_sizes = {"R": 12.0, "A": 1.7, "S": 5.5}
 
-    # The v111 preview used an 18 x 3.55 canvas.  Fixed axes positions retain
-    # that proportion without allowing the shared colorbar to compress the
-    # third map or create uneven panel-to-panel spacing.
+    # Fixed axes positions prevent the shared colorbar from compressing the
+    # third map or creating uneven panel-to-panel spacing.
     fig = plt.figure(figsize=(18.0, 3.55), facecolor="white")
     axes = [
         fig.add_axes([0.045, 0.175, 0.278, 0.655]),
@@ -230,13 +271,24 @@ def save_shared_colorbar_figure(
 
 
 def main() -> None:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--igra-pkl", type=Path, required=True)
+    parser.add_argument("--aircraft-counts", type=Path, required=True)
+    parser.add_argument("--surface-inventory", type=Path, required=True)
+    parser.add_argument("--shapefile", type=Path, required=True)
+    parser.add_argument("--output-dir", type=Path, default=VERSION_ROOT)
+    args = parser.parse_args()
+
+    global FIG_DIR, TABLE_DIR
+    FIG_DIR = args.output_dir / "figures"
+    TABLE_DIR = args.output_dir / "tables"
     FIG_DIR.mkdir(parents=True, exist_ok=True)
     TABLE_DIR.mkdir(parents=True, exist_ok=True)
-    segments = read_polygon_shp(SHP)
+    segments = read_polygon_shp(args.shapefile)
     frames = {
-        "R": load_radiosonde_bins(),
-        "A": load_aircraft_bins(),
-        "S": load_surface_bins(),
+        "R": load_radiosonde_bins(args.igra_pkl),
+        "A": load_aircraft_bins(args.aircraft_counts),
+        "S": load_surface_bins(args.surface_inventory),
     }
     common_max = max(float(np.log10(frame["count"]).max()) for frame in frames.values())
     norm = colors.Normalize(vmin=0.0, vmax=common_max)

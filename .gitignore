@@ -11,6 +11,7 @@ src/results/
 outputs/
 runs/
 checkpoints/
+analysis/generated/
 /artifacts/
 /datasets/
 /data/

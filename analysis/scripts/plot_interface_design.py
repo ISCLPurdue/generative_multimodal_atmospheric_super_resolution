@@ -11,16 +11,11 @@ from matplotlib.colors import TwoSlopeNorm
 import numpy as np
 import pandas as pd
 
+from analysis_paths import required_path
 
-ROOT = Path("/depot/rmaulik/data/yangxu")
 VERSION_ROOT = Path(__file__).resolve().parents[1]
 FIGURE_DIR = VERSION_ROOT / "figures"
-SUMMARY = (
-    ROOT
-    / "reports/2026/07232026report"
-    / "20260723__2019_structural_selection_strat24_analysis"
-    / "tables/structural_summary_all_regions.csv"
-)
+SUMMARY = required_path("INTERFACE_DESIGN_SUMMARY_CSV")
 
 
 def configure_style() -> None:
@@ -82,9 +77,8 @@ def draw_aircraft(summary: pd.DataFrame) -> tuple[Path, Path]:
     reporting_system_labels = {
         "all_qc": "All reporting systems",
         "exclude_tamdar": "All except TAMDAR",
-        "legacy_keep015": "Selected reporting systems",
+        "selected_reporting_systems": "Selected reporting systems",
     }
-    pressure_labels = {"around5": "±5 hPa", "around25": "±25 hPa"}
     representation_labels = {
         "v1_pointwise": "Individual-report\nresiduals",
         "v2_cell_balanced_pointwise": "Cell-balanced\nindividual residuals",
@@ -95,14 +89,14 @@ def draw_aircraft(summary: pd.DataFrame) -> tuple[Path, Path]:
     frame["row_label"] = frame.apply(
         lambda row: (
             f"{reporting_system_labels[row.source_policy]}\n"
-            f"{pressure_labels[row.pressure_window]}"
+            f"±{row.pressure_window_hpa:d} hPa"
         ),
         axis=1,
     )
     row_order = [
-        f"{reporting_system_labels[systems]}\n{pressure_labels[window]}"
-        for systems in ("all_qc", "exclude_tamdar", "legacy_keep015")
-        for window in ("around5", "around25")
+        f"{reporting_system_labels[systems]}\n±{window:d} hPa"
+        for systems in ("all_qc", "exclude_tamdar", "selected_reporting_systems")
+        for window in (5, 25)
     ]
     column_order = [
         "v1_pointwise",
@@ -154,7 +148,7 @@ def draw_aircraft(summary: pd.DataFrame) -> tuple[Path, Path]:
     colorbar.ax.tick_params(labelsize=12.5)
     axis.set_title("Aircraft interface-design comparison")
 
-    return save_figure(figure, "figure14_aircraft_interface_design_v142")
+    return save_figure(figure, "figure14_aircraft_interface_design")
 
 
 def draw_surface_station(summary: pd.DataFrame) -> tuple[Path, Path]:
@@ -232,13 +226,20 @@ def draw_surface_station(summary: pd.DataFrame) -> tuple[Path, Path]:
     axis.spines["right"].set_visible(False)
 
     return save_figure(
-        figure, "figure15_surface_station_residual_representation_v142"
+        figure, "figure15_surface_station_residual_representation"
     )
 
 
 def main() -> None:
     configure_style()
     summary = pd.read_csv(SUMMARY)
+    summary["pressure_window_hpa"] = (
+        summary["pressure_window"].astype(str).str.extract(r"(\d+)")[0].fillna(0).astype(int)
+    )
+    known_policies = {"all_qc", "exclude_tamdar", "selected_reporting_systems"}
+    summary.loc[~summary["source_policy"].isin(known_policies), "source_policy"] = (
+        "selected_reporting_systems"
+    )
     outputs = [draw_aircraft(summary), draw_surface_station(summary)]
     for pdf_path, png_path in outputs:
         print(pdf_path)

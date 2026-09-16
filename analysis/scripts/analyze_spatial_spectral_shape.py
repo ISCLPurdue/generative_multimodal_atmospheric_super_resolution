@@ -5,8 +5,6 @@ import json
 import os
 from pathlib import Path
 
-os.environ.setdefault("MPLCONFIGDIR", "/home/xu2279/.tmp/matplotlib")
-
 import h5py
 import matplotlib
 
@@ -15,22 +13,12 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 
+from analysis_paths import required_path
 
-ROOT = Path("/depot/rmaulik/data/yangxu")
-ERA5 = ROOT / "data_from_DJ_original_NERSC/1.40625deg_from_full_res_1_step_6hr_h5df"
-MANIFEST = (
-    ROOT
-    / "runs/multimodal_madis_13var/20260701__final_protocol_igra_abo_metar_fullyear_2020_2gpu"
-    / "timesteps_full_matched_723.json"
-)
-R_ROOT = ROOT / "runs/goes_13var_3method_grid_protocol_723x12h_20260606/igra_only/samples/igra_only"
-RAS_ROOT = (
-    ROOT
-    / "runs/observation_interface_independent_year_2019"
-    / "20260726__RplusAplusS_2019_frozen_fullyear_2020_4gpu"
-    / "protocols/RplusAplusS_2019_frozen_strict_conus/samples"
-    / "RplusAplusS_2019_frozen_strict_conus"
-)
+ERA5 = required_path("ERA5_ROOT")
+MANIFEST = required_path("EVALUATION_TIMESTEP_MANIFEST")
+R_ROOT = required_path("R_ONLY_SAMPLES_ROOT")
+RAS_ROOT = required_path("RAS_SAMPLES_ROOT")
 OUT_ROOT = Path(__file__).resolve().parents[1]
 OUT_FIG = OUT_ROOT / "figures"
 OUT_TABLE = OUT_ROOT / "tables"
@@ -57,10 +45,19 @@ TARGETS = [
 ]
 PROTOCOLS = {
     "ERA5 reference": None,
-    "R": (R_ROOT, "igra_only"),
-    "R+A+S": (RAS_ROOT, "RplusAplusS_2019_frozen_strict_conus"),
+    "R": R_ROOT,
+    "R+A+S": RAS_ROOT,
 }
 COLORS = {"ERA5 reference": "#202124", "R": "#2A6FAD", "R+A+S": "#D97706"}
+
+
+def sample_path(root: Path, timestep: int) -> Path:
+    matches = sorted(root.glob(f"*_t{timestep:04d}_e16_s50.npy"))
+    if len(matches) != 1:
+        raise FileNotFoundError(
+            f"Expected one sample file for timestep {timestep} in {root}, found {len(matches)}"
+        )
+    return matches[0]
 
 
 def configure_plotting() -> None:
@@ -180,21 +177,21 @@ def plot_spectra(table: pd.DataFrame) -> None:
         "Spatial spectral shape over the CONUS domain at 723 analysis times",
         fontweight="bold",
     )
-    figure.savefig(OUT_FIG / "spatial_spectral_shape_conus_v146.pdf")
-    figure.savefig(OUT_FIG / "spatial_spectral_shape_conus_v146.png", dpi=300)
+    figure.savefig(OUT_FIG / "spatial_spectral_shape_conus.pdf")
+    figure.savefig(OUT_FIG / "spatial_spectral_shape_conus.png", dpi=300)
     plt.close(figure)
 
 
 def main() -> None:
     configure_plotting()
     OUT_TABLE.mkdir(exist_ok=True)
-    cached_table = OUT_TABLE / "frozen2019_full723_conus_spatial_spectral_shape.csv"
+    cached_table = OUT_TABLE / "conus_spatial_spectral_shape_2020.csv"
     if cached_table.exists():
         plot_spectra(pd.read_csv(cached_table))
-        print(OUT_FIG / "spatial_spectral_shape_conus_v146.pdf")
+        print(OUT_FIG / "spatial_spectral_shape_conus.pdf")
         return
     payload = json.loads(MANIFEST.read_text())
-    timesteps = [int(t) for t in payload["matched_timesteps"]]
+    timesteps = [int(t) for t in payload["timesteps"]]
     if len(timesteps) != 723:
         raise ValueError(f"Expected 723 timesteps, found {len(timesteps)}")
     mean, std = load_normalization()
@@ -214,8 +211,8 @@ def main() -> None:
     for n, timestep in enumerate(timesteps, start=1):
         if n == 1 or n % 50 == 0 or n == len(timesteps):
             print(f"[{n:03d}/{len(timesteps)}] t{timestep:04d}", flush=True)
-        r_path = R_ROOT / f"igra_only_t{timestep:04d}_e16_s50.npy"
-        ras_path = RAS_ROOT / f"RplusAplusS_2019_frozen_strict_conus_t{timestep:04d}_e16_s50.npy"
+        r_path = sample_path(R_ROOT, timestep)
+        ras_path = sample_path(RAS_ROOT, timestep)
         r = np.load(r_path, mmap_mode="r")
         ras = np.load(ras_path, mmap_mode="r")
         with h5py.File(ERA5 / "test" / f"2020_{timestep:04d}.h5", "r") as handle:
@@ -248,9 +245,9 @@ def main() -> None:
                     }
                 )
     table = pd.DataFrame(rows)
-    table.to_csv(OUT_TABLE / "frozen2019_full723_conus_spatial_spectral_shape.csv", index=False)
+    table.to_csv(OUT_TABLE / "conus_spatial_spectral_shape_2020.csv", index=False)
     plot_spectra(table)
-    print(OUT_FIG / "spatial_spectral_shape_conus_v146.pdf")
+    print(OUT_FIG / "spatial_spectral_shape_conus.pdf")
 
 
 if __name__ == "__main__":

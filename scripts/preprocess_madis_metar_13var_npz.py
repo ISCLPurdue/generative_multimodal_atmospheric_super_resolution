@@ -13,7 +13,7 @@ from pathlib import Path
 import numpy as np
 from netCDF4 import Dataset
 
-from independent_year_common import STRICT_CONUS, lon_to_180, six_hour_index
+from observation_preprocessing_common import STRICT_CONUS, lon_to_180, six_hour_index
 
 
 def decode_nc(path: Path) -> Path:
