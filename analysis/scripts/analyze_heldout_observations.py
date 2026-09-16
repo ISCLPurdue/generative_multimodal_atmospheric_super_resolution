@@ -92,12 +92,55 @@ def load_normalization() -> tuple[np.ndarray, np.ndarray]:
 
 def load_ensemble_mean(path: Path, mean: np.ndarray, std: np.ndarray) -> np.ndarray:
     array = np.load(path, mmap_mode="r")
+    expected_shape = (16, len(VARIABLES), 128, 256)
+    if array.shape != expected_shape:
+        raise ValueError(f"{path} has shape {array.shape}; expected {expected_shape}")
+    if not np.isfinite(array).all():
+        raise ValueError(f"{path} contains non-finite posterior values")
     normalized_mean = np.asarray(array, dtype=np.float32).mean(axis=0)
     return normalized_mean * std + mean
 
 
 def select_values(field: np.ndarray, variable: str, flat_cells: np.ndarray) -> np.ndarray:
     return field[VARIABLES.index(variable)].reshape(-1)[flat_cells]
+
+
+def validate_targets(targets: pd.DataFrame) -> None:
+    required = {
+        "family",
+        "spatial_domain",
+        "timestep",
+        "variable",
+        "var_short",
+        "flat_cell",
+        "target",
+        "n_obs_in_target",
+    }
+    missing = sorted(required - set(targets.columns))
+    if missing:
+        raise ValueError(f"Held-out target table is missing columns: {missing}")
+    if set(targets["spatial_domain"]) != {"CONUS"}:
+        raise ValueError("Held-out targets must identify the CONUS spatial domain")
+    if targets["timestep"].nunique() != 24:
+        raise ValueError("Held-out target table must contain 24 analysis times")
+    expected = {
+        "surface": set(SURFACE_ORDER),
+        "aircraft": set(AIRCRAFT_ORDER),
+    }
+    for family, variables in expected.items():
+        selected = targets[targets["family"].eq(family)]
+        if set(selected["variable"]) != variables:
+            raise ValueError(f"Unexpected {family} target variables")
+        counts = selected.groupby("timestep")["variable"].nunique()
+        if len(counts) != 24 or not counts.eq(len(variables)).all():
+            raise ValueError(
+                f"Every analysis time must contain all {family} target variables"
+            )
+    key = ["family", "timestep", "variable", "flat_cell"]
+    if targets.duplicated(key).any():
+        raise ValueError("Held-out target table contains duplicate cell targets")
+    if not np.isfinite(targets["target"]).all():
+        raise ValueError("Held-out target table contains non-finite values")
 
 
 def attach_predictions(targets: pd.DataFrame) -> pd.DataFrame:
@@ -448,10 +491,7 @@ def main() -> None:
     TABLES.mkdir(parents=True, exist_ok=True)
     FIGURES.mkdir(parents=True, exist_ok=True)
     targets = pd.read_csv(HOLDOUT_TARGETS)
-    if "spatial_domain" not in targets or set(targets["spatial_domain"]) != {"CONUS"}:
-        raise RuntimeError(
-            "Held-out targets must explicitly identify the CONUS spatial domain"
-        )
+    validate_targets(targets)
     rmse = attach_predictions(targets)
     effects = paired_effects(rmse)
     variable_summary_all = summarize_variables(effects)

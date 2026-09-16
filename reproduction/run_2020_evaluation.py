@@ -143,6 +143,16 @@ def main() -> None:
         "steps": steps,
         "seed": args.seed,
         "interface_config": str(args.interface_config.resolve()),
+        "timesteps_manifest": str(args.timesteps.resolve()),
+        "hydra_config": str(args.hydra_config.resolve()),
+        "checkpoint": str(args.checkpoint.resolve()),
+        "era5_root": str(args.era5_root.resolve()),
+        "igra_pkl": str(args.igra_pkl.resolve()),
+        "aircraft_root": str(args.aircraft_root.resolve()) if args.aircraft_root else None,
+        "surface_root": str(args.surface_root.resolve()) if args.surface_root else None,
+        "output_root": str(output_root.resolve()),
+        "likelihood_structure": "source_specific",
+        "selected_parameters": selected,
         "aircraft_data_sources": aircraft_data_sources,
     }
     (output_root / "resolved_run.json").write_text(
