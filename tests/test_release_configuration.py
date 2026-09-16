@@ -145,7 +145,7 @@ class ReleaseConfigurationTests(unittest.TestCase):
             self.assertTrue(self.split.conus_mask(kept).all())
             self.assertTrue(self.split.conus_mask(left_out).all())
         self.assertTrue(all(row["n_input_obs"] == 3 for row in rows))
-        self.assertTrue(all(row["n_original_obs"] == 2 for row in rows))
+        self.assertTrue(all(row["n_eligible_obs"] == 2 for row in rows))
 
     def test_holdout_target_builder_averages_within_cell(self):
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -279,10 +279,20 @@ class ReleaseConfigurationTests(unittest.TestCase):
             if row["method"] == "heldout80"
         }
         self.assertAlmostEqual(float(selected["surface"]["mean_effect_pct"]), -13.4992, places=3)
-        self.assertAlmostEqual(float(selected["aircraft"]["mean_effect_pct"]), -8.0574, places=3)
+        self.assertAlmostEqual(float(selected["aircraft"]["mean_effect_pct"]), -11.7137, places=3)
+        self.assertEqual(int(selected["aircraft"]["n_timesteps"]), 24)
+        self.assertAlmostEqual(
+            float(selected["aircraft"]["improved_timestep_fraction"]),
+            23 / 24,
+        )
         self.assertTrue(
             all(float(row["ci95_high_pct"]) < 0.0 for row in selected.values())
         )
+        manuscript_table = (
+            REPO_ROOT / "analysis/manuscript_tables/heldout_observation_evaluation.tex"
+        ).read_text(encoding="utf-8")
+        self.assertIn("2020 CONUS observations", manuscript_table)
+        self.assertIn("$-11.71\\%$ & $[-14.48,-9.00]\\%$ & $23/24$", manuscript_table)
 
     def test_resolved_prior_configuration_is_packaged(self):
         text = PRIOR_CONFIG_PATH.read_text(encoding="utf-8")

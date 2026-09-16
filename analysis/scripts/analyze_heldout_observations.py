@@ -227,25 +227,35 @@ def summarize_variables(effects: pd.DataFrame) -> pd.DataFrame:
     # Preserve the paper analysis's bootstrap draw order. The full-R+A+S rows
     # are summarized here but filtered from the compact public output below.
     selected = effects[effects["method"].isin(["heldout80", "full_RAS"])]
-    for keys, group in selected.groupby(
-        ["family", "variable", "var_short", "method", "method_display"], sort=False
-    ):
-        values = group["pct_change_vs_matched_baseline"].to_numpy(dtype=float)
-        low, high = bootstrap_mean(values, rng)
-        rows.append(
-            {
-                "family": keys[0],
-                "variable": keys[1],
-                "var_short": keys[2],
-                "method": keys[3],
-                "method_display": keys[4],
-                "n_timesteps": len(values),
-                "mean_effect_pct": float(values.mean()),
-                "ci95_low_pct": low,
-                "ci95_high_pct": high,
-                "improved_timestep_fraction": float(np.mean(values < 0)),
-            }
-        )
+    family_variables = (("surface", SURFACE_ORDER), ("aircraft", AIRCRAFT_ORDER))
+    for family, variables in family_variables:
+        for variable in variables:
+            for method in ("heldout80", "full_RAS"):
+                group = selected[
+                    selected["family"].eq(family)
+                    & selected["variable"].eq(variable)
+                    & selected["method"].eq(method)
+                ]
+                if group.empty:
+                    raise ValueError(
+                        f"Missing {family}/{variable}/{method} effects"
+                    )
+                values = group["pct_change_vs_matched_baseline"].to_numpy(dtype=float)
+                low, high = bootstrap_mean(values, rng)
+                rows.append(
+                    {
+                        "family": family,
+                        "variable": variable,
+                        "var_short": group["var_short"].iloc[0],
+                        "method": method,
+                        "method_display": group["method_display"].iloc[0],
+                        "n_timesteps": len(values),
+                        "mean_effect_pct": float(values.mean()),
+                        "ci95_low_pct": low,
+                        "ci95_high_pct": high,
+                        "improved_timestep_fraction": float(np.mean(values < 0)),
+                    }
+                )
     return pd.DataFrame(rows)
 
 

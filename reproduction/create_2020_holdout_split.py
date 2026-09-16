@@ -178,10 +178,10 @@ def split_aircraft(
                 "spatial_domain": "CONUS by native report coordinates",
                 "holdout_unit": "ERA5 cell x variable",
                 "n_input_obs": int(all_locations.shape[0]),
-                "n_original_obs": int(cells.size),
+                "n_eligible_obs": int(cells.size),
                 "n_retained_obs": int(is_retained.sum()),
                 "n_excluded_obs": int(is_excluded.sum()),
-                "n_original_cells": int(np.unique(cells).size),
+                "n_eligible_cells": int(np.unique(cells).size),
                 "n_excluded_cells": int(excluded_cells.size),
             }
         )
@@ -249,10 +249,10 @@ def split_surface(
                 "spatial_domain": "CONUS by native report coordinates",
                 "holdout_unit": "ERA5 cell shared across surface variables",
                 "n_input_obs": int(locations.shape[0]),
-                "n_original_obs": int(cells.size),
+                "n_eligible_obs": int(cells.size),
                 "n_retained_obs": int(is_retained.sum()),
                 "n_excluded_obs": int(is_excluded.sum()),
-                "n_original_cells": int(np.unique(cells).size),
+                "n_eligible_cells": int(np.unique(cells).size),
                 "n_excluded_cells": int(
                     np.unique(cells[eligible_is_excluded]).size
                 ),
