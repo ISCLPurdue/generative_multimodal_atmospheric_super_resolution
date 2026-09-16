@@ -181,7 +181,9 @@ def bootstrap_mean(values: np.ndarray, rng: np.random.Generator) -> tuple[float,
 def summarize_variables(effects: pd.DataFrame) -> pd.DataFrame:
     rng = np.random.default_rng(BOOTSTRAP_SEED)
     rows = []
-    selected = effects[effects["method"].eq("heldout80")]
+    # Preserve the paper analysis's bootstrap draw order. The full-R+A+S rows
+    # are summarized here but filtered from the compact public output below.
+    selected = effects[effects["method"].isin(["heldout80", "full_RAS"])]
     for keys, group in selected.groupby(
         ["family", "variable", "var_short", "method", "method_display"], sort=False
     ):
@@ -206,7 +208,7 @@ def summarize_variables(effects: pd.DataFrame) -> pd.DataFrame:
 
 def summarize_families(effects: pd.DataFrame) -> tuple[pd.DataFrame, pd.DataFrame]:
     timestep_effects = (
-        effects[effects["method"].eq("heldout80")]
+        effects[effects["method"].isin(["heldout80", "full_RAS"])]
         .groupby(["family", "method", "method_display", "timestep"], as_index=False)[
             "pct_change_vs_matched_baseline"
         ]
@@ -452,8 +454,17 @@ def main() -> None:
         )
     rmse = attach_predictions(targets)
     effects = paired_effects(rmse)
-    variable_summary = summarize_variables(effects)
-    family_summary, timestep_effects = summarize_families(effects)
+    variable_summary_all = summarize_variables(effects)
+    family_summary_all, timestep_effects_all = summarize_families(effects)
+    variable_summary = variable_summary_all[
+        variable_summary_all["method"].eq("heldout80")
+    ].reset_index(drop=True)
+    family_summary = family_summary_all[
+        family_summary_all["method"].eq("heldout80")
+    ].reset_index(drop=True)
+    timestep_effects = timestep_effects_all[
+        timestep_effects_all["method"].eq("heldout80")
+    ].reset_index(drop=True)
     figure = make_figure(family_summary, variable_summary)
 
     rmse.to_csv(TABLES / "rmse_by_timestep_variable.csv", index=False)

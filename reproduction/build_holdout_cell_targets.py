@@ -52,6 +52,11 @@ def parse_args() -> argparse.Namespace:
         required=True,
         help="Surface split's heldout_obs directory.",
     )
+    parser.add_argument(
+        "--spatial-domain",
+        required=True,
+        help="Domain already enforced when the retained/excluded splits were created.",
+    )
     parser.add_argument("--output-csv", type=Path, required=True)
     return parser.parse_args()
 
@@ -64,7 +69,7 @@ def timestep_from_path(path: Path) -> int:
 
 
 def cell_mean_rows(
-    path: Path, family: str, variables: list[str]
+    path: Path, family: str, variables: list[str], spatial_domain: str
 ) -> list[dict[str, object]]:
     rows: list[dict[str, object]] = []
     timestep = timestep_from_path(path)
@@ -89,7 +94,7 @@ def cell_mean_rows(
                 rows.append(
                     {
                         "family": family,
-                        "spatial_domain": "CONUS",
+                        "spatial_domain": spatial_domain,
                         "timestep": timestep,
                         "variable": variable,
                         "var_short": SHORT_NAMES[variable],
@@ -101,21 +106,34 @@ def cell_mean_rows(
     return rows
 
 
-def collect(root: Path, family: str, variables: list[str]) -> list[dict[str, object]]:
+def collect(
+    root: Path,
+    family: str,
+    variables: list[str],
+    spatial_domain: str,
+) -> list[dict[str, object]]:
     paths = sorted(root.glob("*.npz"))
     if not paths:
         raise FileNotFoundError(f"No NPZ files found under {root}")
     rows: list[dict[str, object]] = []
     for path in paths:
-        rows.extend(cell_mean_rows(path, family, variables))
+        rows.extend(cell_mean_rows(path, family, variables, spatial_domain))
     return rows
 
 
 def main() -> None:
     args = parse_args()
     rows = collect(
-        args.surface_excluded_root, "surface", SURFACE_VARIABLES
-    ) + collect(args.aircraft_excluded_root, "aircraft", AIRCRAFT_VARIABLES)
+        args.surface_excluded_root,
+        "surface",
+        SURFACE_VARIABLES,
+        args.spatial_domain,
+    ) + collect(
+        args.aircraft_excluded_root,
+        "aircraft",
+        AIRCRAFT_VARIABLES,
+        args.spatial_domain,
+    )
     rows.sort(
         key=lambda row: (
             int(row["timestep"]),

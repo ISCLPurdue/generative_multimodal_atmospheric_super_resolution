@@ -123,6 +123,7 @@ Build the common cell-mean target table used by the held-out analysis with:
 python reproduction/build_holdout_cell_targets.py \
   --aircraft-excluded-root /path/to/aircraft_holdout_root/heldout_obs \
   --surface-excluded-root /path/to/surface_holdout_root/heldout_obs \
+  --spatial-domain CONUS \
   --output-csv /path/to/holdout_cell_targets.csv
 ```
 

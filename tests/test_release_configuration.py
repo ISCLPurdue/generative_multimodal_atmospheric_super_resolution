@@ -156,7 +156,7 @@ class ReleaseConfigurationTests(unittest.TestCase):
                 temperature_500_era5_flat_cells=np.asarray([7, 7, 11]),
             )
             rows = self.targets.cell_mean_rows(
-                path, "aircraft", ["temperature_500"]
+                path, "aircraft", ["temperature_500"], "CONUS"
             )
         self.assertEqual(len(rows), 2)
         self.assertEqual(rows[0]["spatial_domain"], "CONUS")
