@@ -48,10 +48,12 @@ def read_var(ds: Any, *names: str) -> np.ndarray | None:
 
 
 def read_qcr(ds: Any, name: str, target_shape: tuple[int, ...]) -> np.ndarray:
-    """Read a MADIS quality-control result field, defaulting to pass if absent."""
+    """Read a required MADIS quality-control result field."""
     qname = f"{name}QCR"
     if qname not in ds.variables:
-        return np.zeros(target_shape, dtype=np.int64)
+        raise KeyError(
+            f"Required MADIS quality-control field {qname!r} is absent"
+        )
     arr = np.asarray(ds.variables[qname][:])
     if arr.shape == target_shape:
         return arr.astype(np.int64)

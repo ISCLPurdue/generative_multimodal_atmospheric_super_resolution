@@ -97,6 +97,7 @@ def download_one(row: dict, output_root: Path, retries: int) -> dict:
 
 def write_manifest(rows: list[dict], csv_path: Path, json_path: Path, years: list[int]) -> None:
     csv_path.parent.mkdir(parents=True, exist_ok=True)
+    json_path.parent.mkdir(parents=True, exist_ok=True)
     fields = sorted({key for row in rows for key in row})
     with csv_path.open("w", newline="") as handle:
         writer = csv.DictWriter(handle, fieldnames=fields)

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Build the V137 static and runtime R/A/S mechanism diagnostics."""
+"""Build the static and runtime R/A/S mechanism diagnostics."""
 
 from __future__ import annotations
 

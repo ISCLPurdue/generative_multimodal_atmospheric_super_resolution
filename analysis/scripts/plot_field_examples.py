@@ -217,6 +217,7 @@ def make_figure(short: str, spec: dict[str, str], r: np.ndarray, ras: np.ndarray
 
 def main() -> None:
     configure_plotting()
+    OUT.mkdir(parents=True, exist_ok=True)
     means = np.load(ERA5 / "normalize_mean.npz")
     stds = np.load(ERA5 / "normalize_std.npz")
     mean = np.asarray([float(np.asarray(means[v]).reshape(-1)[0]) for v in VARIABLES])

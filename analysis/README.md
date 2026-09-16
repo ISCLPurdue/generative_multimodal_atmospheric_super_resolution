@@ -29,8 +29,10 @@ posterior sample arrays described in `../DATA.md`.
 The numerical summaries are small enough to distribute directly. Recomputing
 them from scratch requires the external ERA5 files, observation products,
 normalization files, checkpoint, and posterior samples. Analysis inputs are
-supplied through the environment variables named in each script, and generated
-outputs default to `analysis/generated/` unless an output variable is set.
+supplied through the environment variables named in each script. Numerical
+analyses use subdirectories of `analysis/generated/` by default; standalone
+plotting scripts write to `analysis/figures/` or `analysis/tables/` unless an
+output variable is provided.
 
 For example, the annual R+A+S analysis expects directories containing the
 ERA5 fields, R-only samples, and R+A+S samples, together with the evaluation

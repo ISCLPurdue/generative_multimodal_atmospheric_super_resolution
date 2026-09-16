@@ -24,6 +24,7 @@ DEFAULT_TIMESTEPS = (
     REPO_ROOT / "reproduction/manifests/holdout_timesteps_2020.json"
 )
 DEFAULT_INTERFACE = REPO_ROOT / "reproduction/config/selected_interface_2019.json"
+CONUS_BOUNDS = (24.0, 50.0, -125.0, -66.0)
 AIRCRAFT_VARIABLES = [
     "temperature_500",
     "temperature_850",
@@ -55,6 +56,23 @@ def nearest_era5_flat_cells(
     lat_index = np.clip(lat_index, 0, lat_axis.size - 1)
     lon_index = np.mod(lon_index, lon_axis.size)
     return lat_index * lon_axis.size + lon_index
+
+
+def conus_mask(locations: np.ndarray) -> np.ndarray:
+    """Select reports by native coordinates within the paper's CONUS domain."""
+    locations = np.asarray(locations, dtype=np.float64)
+    if locations.size == 0:
+        return np.zeros((0,), dtype=bool)
+    lat0, lat1, lon0, lon1 = CONUS_BOUNDS
+    longitude = (locations[:, 1] + 180.0) % 360.0 - 180.0
+    return (
+        np.isfinite(locations[:, 0])
+        & np.isfinite(longitude)
+        & (locations[:, 0] >= lat0)
+        & (locations[:, 0] <= lat1)
+        & (longitude >= lon0)
+        & (longitude <= lon1)
+    )
 
 
 def load_metadata(data: np.lib.npyio.NpzFile) -> dict:
@@ -125,8 +143,10 @@ def split_aircraft(
         all_locations = np.asarray(data[f"{variable}_locs"], dtype=np.float32)
         source_codes = np.asarray(data[f"{variable}_data_source"], dtype=np.int16)
         source_products = np.asarray(data[f"{variable}_source_product"])
-        is_eligible = np.isin(source_codes, sorted(allowed_source_codes)) & (
-            source_products == "acars"
+        is_eligible = (
+            np.isin(source_codes, sorted(allowed_source_codes))
+            & (source_products == "acars")
+            & conus_mask(all_locations)
         )
         locations = all_locations[is_eligible]
         cells = (
@@ -155,7 +175,9 @@ def split_aircraft(
                 "timestep": timestep,
                 "source": "aircraft",
                 "variable": variable,
+                "spatial_domain": "CONUS by native report coordinates",
                 "holdout_unit": "ERA5 cell x variable",
+                "n_input_obs": int(all_locations.shape[0]),
                 "n_original_obs": int(cells.size),
                 "n_retained_obs": int(is_retained.sum()),
                 "n_excluded_obs": int(is_excluded.sum()),
@@ -175,15 +197,19 @@ def split_surface(
     holdout_fraction: float,
 ) -> tuple[dict[str, np.ndarray], dict[str, np.ndarray], list[dict]]:
     per_variable_cells: dict[str, np.ndarray] = {}
+    per_variable_eligible: dict[str, np.ndarray] = {}
     observed_cells: list[np.ndarray] = []
     for variable in SURFACE_VARIABLES:
         locations = np.asarray(data[f"{variable}_locs"], dtype=np.float32)
+        is_eligible = conus_mask(locations)
+        eligible_locations = locations[is_eligible]
         cells = (
-            nearest_era5_flat_cells(locations, lat_axis, lon_axis)
-            if locations.size
+            nearest_era5_flat_cells(eligible_locations, lat_axis, lon_axis)
+            if eligible_locations.size
             else np.empty((0,), dtype=np.int64)
         )
         per_variable_cells[variable] = cells
+        per_variable_eligible[variable] = is_eligible
         if cells.size:
             observed_cells.append(np.unique(cells))
 
@@ -200,27 +226,36 @@ def split_surface(
     rows: list[dict] = []
     for variable in SURFACE_VARIABLES:
         cells = per_variable_cells[variable]
-        is_excluded = np.asarray(
+        eligible_is_excluded = np.asarray(
             [int(cell) in excluded_set for cell in cells], dtype=bool
         )
         locations = np.asarray(data[f"{variable}_locs"], dtype=np.float32)
         values = np.asarray(data[f"{variable}_vals"], dtype=np.float32)
-        retained[f"{variable}_locs"] = locations[~is_excluded]
-        retained[f"{variable}_vals"] = values[~is_excluded]
+        eligible_indices = np.flatnonzero(per_variable_eligible[variable])
+        is_retained = np.zeros(locations.shape[0], dtype=bool)
+        is_excluded = np.zeros(locations.shape[0], dtype=bool)
+        is_retained[eligible_indices[~eligible_is_excluded]] = True
+        is_excluded[eligible_indices[eligible_is_excluded]] = True
+        retained[f"{variable}_locs"] = locations[is_retained]
+        retained[f"{variable}_vals"] = values[is_retained]
         excluded[f"{variable}_locs"] = locations[is_excluded]
         excluded[f"{variable}_vals"] = values[is_excluded]
-        excluded[f"{variable}_era5_flat_cells"] = cells[is_excluded]
+        excluded[f"{variable}_era5_flat_cells"] = cells[eligible_is_excluded]
         rows.append(
             {
                 "timestep": timestep,
                 "source": "surface",
                 "variable": variable,
+                "spatial_domain": "CONUS by native report coordinates",
                 "holdout_unit": "ERA5 cell shared across surface variables",
+                "n_input_obs": int(locations.shape[0]),
                 "n_original_obs": int(cells.size),
-                "n_retained_obs": int((~is_excluded).sum()),
+                "n_retained_obs": int(is_retained.sum()),
                 "n_excluded_obs": int(is_excluded.sum()),
                 "n_original_cells": int(np.unique(cells).size),
-                "n_excluded_cells": int(np.unique(cells[is_excluded]).size),
+                "n_excluded_cells": int(
+                    np.unique(cells[eligible_is_excluded]).size
+                ),
             }
         )
     excluded["heldout_era5_flat_cells"] = excluded_cells
@@ -286,12 +321,18 @@ def main() -> None:
             metadata = {
                 **load_metadata(data),
                 "holdout_protocol": (
-                    "aircraft_cell_variable_train80_holdout20"
+                    "aircraft_conus_cell_variable_train80_holdout20"
                     if args.source == "aircraft"
-                    else "surface_cell_train80_holdout20"
+                    else "surface_conus_cell_train80_holdout20"
                 ),
                 "holdout_fraction": args.holdout_fraction,
                 "holdout_seed": args.seed,
+                "spatial_domain": {
+                    "name": "CONUS",
+                    "selection": "native report coordinates before cell assignment",
+                    "latitude_degrees_north": [CONUS_BOUNDS[0], CONUS_BOUNDS[1]],
+                    "longitude_degrees_east": [CONUS_BOUNDS[2], CONUS_BOUNDS[3]],
+                },
                 "timestep": timestep,
                 "created_utc": datetime.now(timezone.utc).strftime(
                     "%Y-%m-%dT%H:%M:%SZ"
@@ -323,6 +364,12 @@ def main() -> None:
         "timesteps": timesteps,
         "seed": args.seed,
         "holdout_fraction": args.holdout_fraction,
+        "spatial_domain": {
+            "name": "CONUS",
+            "selection": "native report coordinates before cell assignment",
+            "latitude_degrees_north": [CONUS_BOUNDS[0], CONUS_BOUNDS[1]],
+            "longitude_degrees_east": [CONUS_BOUNDS[2], CONUS_BOUNDS[3]],
+        },
         "n_files": len(timesteps),
         "retained_observations": str(retained_root.resolve()),
         "excluded_observations": str(excluded_root.resolve()),

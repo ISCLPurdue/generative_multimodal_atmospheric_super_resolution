@@ -12,6 +12,10 @@ users to provide all data and model paths explicitly.
   conditioning posterior-sampling run.
 - `create_2020_holdout_split.py`: reproducible 80/20 cell-based split for the
   24 held-out-evaluation analysis times.
+- `validate_holdout_split.py`: checks the aircraft split against the source
+  reports, including its CONUS domain, partition counts, and cell disjointness.
+- `build_holdout_cell_targets.py`: cell-mean evaluation targets constructed
+  from the observations excluded by the two splits.
 - `config/atmospheric_prior_13var.yaml`: resolved architecture and dataset
   configuration for the fixed 13-variable atmospheric prior.
 - `config/selected_interface_2019.json`: selected likelihood parameters and
@@ -69,14 +73,60 @@ python reproduction/create_2020_holdout_split.py \
   --era5-root /path/to/era5_1.40625deg
 ```
 
-For each analysis time, the surface split excludes a random 20% of the union
-of surface-observed ERA5 cells. The aircraft split independently excludes a
-random 20% of observed ERA5 cells for each of the six aircraft-targeted
-variables. Both use base seed 17 and write the retained targets to `obs/`, the
-excluded targets to `heldout_obs/`, and an auditable split manifest and CSV
-summary alongside them.
+Both splits first retain reports whose native coordinates lie within the
+paper's CONUS domain. For each analysis time, the surface split excludes a
+random 20% of the union of surface-observed ERA5 cells. The aircraft split
+independently excludes a random 20% of observed ERA5 cells for each of the six
+aircraft-targeted variables. Both use base seed 17 and write the retained
+targets to `obs/`, the excluded targets to `heldout_obs/`, and an auditable
+split manifest and CSV summary alongside them.
 
-The two wrappers generate posterior samples and per-run metadata. They do not
+The aircraft split can be checked independently before sampling:
+
+```bash
+python reproduction/validate_holdout_split.py \
+  --input-root /path/to/processed_madis_aircraft_2020 \
+  --split-root /path/to/aircraft_holdout_root \
+  --era5-root /path/to/era5_1.40625deg \
+  --output-json /path/to/aircraft_holdout_root/validation.json
+```
+
+## Running the held-out conditioning experiments
+
+Pass the split output root for the selected source; the wrapper reads retained
+observations from its `obs/` subdirectory. The other source continues to use
+its complete processed root:
+
+```bash
+python reproduction/run_2020_holdout.py \
+  --holdout aircraft \
+  --checkpoint /path/to/checkpoint.pt \
+  --era5-root /path/to/era5_1.40625deg \
+  --igra-pkl /path/to/igra_2020.pkl \
+  --aircraft-root /path/to/aircraft_holdout_root \
+  --surface-root /path/to/processed_madis_metar_2020 \
+  --output-root /path/to/aircraft_holdout_samples
+
+python reproduction/run_2020_holdout.py \
+  --holdout surface \
+  --checkpoint /path/to/checkpoint.pt \
+  --era5-root /path/to/era5_1.40625deg \
+  --igra-pkl /path/to/igra_2020.pkl \
+  --aircraft-root /path/to/processed_madis_aircraft_2020 \
+  --surface-root /path/to/surface_holdout_root \
+  --output-root /path/to/surface_holdout_samples
+```
+
+Build the common cell-mean target table used by the held-out analysis with:
+
+```bash
+python reproduction/build_holdout_cell_targets.py \
+  --aircraft-excluded-root /path/to/aircraft_holdout_root/heldout_obs \
+  --surface-excluded-root /path/to/surface_holdout_root/heldout_obs \
+  --output-csv /path/to/holdout_cell_targets.csv
+```
+
+The sampling wrappers generate posterior samples and per-run metadata. They do not
 perform the downstream metric aggregation, bootstrap analysis, or figure and
 table generation reported in the manuscript. The corresponding downstream
 scripts and compact reported summaries are documented in

@@ -19,9 +19,8 @@ def sampler_factory(
     """Factory to return a sampler function based on the mode.
 
     Args:
-        mode: Sampling mode ("edm", "edm_pos_sample", "edm_cfg_sample", "cfm")
+        mode: Sampling mode ("edm", "edm_pos_sample", or "cfm")
         net: Main network model
-        net_cfg: CFG network model (only for edm_cfg_sample mode)
         conditioning_type: Type of conditioning ("unconditional", "sr", "igra", "sr_igra")
         in_shape: Input shape for SR operations (only used for conditional sampling)
         target_shape: Target shape for SR operations (only used for conditional sampling)

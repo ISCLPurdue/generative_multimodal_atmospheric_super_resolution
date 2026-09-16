@@ -80,7 +80,13 @@ def main() -> None:
         selected.update(stations[i]["station_id"] for i in matches)
 
     rows = [r for r in stations if r["station_id"] in selected]
+    if not rows:
+        raise RuntimeError(
+            "No IGRA stations matched the reference coordinates; check the "
+            "reference pickle, station list, year, and coordinate tolerance"
+        )
     args.output_csv.parent.mkdir(parents=True, exist_ok=True)
+    args.summary_json.parent.mkdir(parents=True, exist_ok=True)
     with args.output_csv.open("w", newline="") as handle:
         writer = csv.DictWriter(handle, fieldnames=list(rows[0]))
         writer.writeheader()

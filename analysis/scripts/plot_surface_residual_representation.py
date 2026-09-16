@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Draw Figure 15 as a horizontal grouped bar chart."""
+"""Draw the surface residual-representation comparison."""
 
 from pathlib import Path
 

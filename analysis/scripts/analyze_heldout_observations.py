@@ -235,14 +235,87 @@ def summarize_families(effects: pd.DataFrame) -> tuple[pd.DataFrame, pd.DataFram
     return pd.DataFrame(rows), timestep_effects
 
 
+def configure_typography() -> None:
+    """Match the compact typography used by the manuscript figures."""
+    plt.rcdefaults()
+    plt.rcParams.update(
+        {
+            "font.family": "Nimbus Sans",
+            "mathtext.fontset": "cm",
+            "axes.unicode_minus": True,
+            "pdf.fonttype": 42,
+            "ps.fonttype": 42,
+            "font.size": 12.5,
+            "axes.titlesize": 14,
+            "axes.titleweight": "bold",
+            "axes.labelsize": 13,
+            "xtick.labelsize": 12,
+            "ytick.labelsize": 12,
+            "legend.fontsize": 11.5,
+            "figure.facecolor": "white",
+            "axes.facecolor": "white",
+            "savefig.facecolor": "white",
+        }
+    )
+
+
+def forest_axis(
+    axis: plt.Axes,
+    selected: pd.DataFrame,
+    order: list[str],
+    color: str,
+    title: str,
+    subtitle: str,
+    x_limits: tuple[float, float],
+) -> None:
+    for index, variable in enumerate(order):
+        row = selected.loc[variable]
+        value = float(row["mean_effect_pct"])
+        low = float(row["ci95_low_pct"])
+        high = float(row["ci95_high_pct"])
+        axis.errorbar(
+            value,
+            index,
+            xerr=[[value - low], [high - value]],
+            fmt="o",
+            color=color,
+            ecolor=color,
+            capsize=3.5,
+            markersize=6.5,
+            linewidth=1.8,
+            zorder=3,
+        )
+        if index % 2 == 0:
+            axis.axhspan(index - 0.5, index + 0.5, color="#F3F6F9", zorder=0)
+    axis.axvline(0.0, color="#586574", linestyle="--", linewidth=1.2)
+    axis.set_yticks(np.arange(len(order)), [rf"${SHORT[name]}$" for name in order])
+    axis.invert_yaxis()
+    axis.set_xlim(*x_limits)
+    axis.grid(axis="x", alpha=0.24)
+    axis.set_title(title, loc="left", fontsize=14, pad=27)
+    axis.text(
+        0.0,
+        1.01,
+        subtitle,
+        transform=axis.transAxes,
+        ha="left",
+        va="bottom",
+        fontsize=11.5,
+        color="#4B5563",
+    )
+    for spine in ("top", "right"):
+        axis.spines[spine].set_visible(False)
+
+
 def make_figure(family_summary: pd.DataFrame, variable_summary: pd.DataFrame) -> Path:
-    output = FIGURES / "matched_marginal_holdout_summary.png"
-    navy, orange, teal, green = "#172A46", "#E67E22", "#0F8B8D", "#27966F"
+    configure_typography()
+    output = FIGURES / "frozen2019_holdout_excluded_observations.pdf"
+    navy, orange, teal = "#172A46", "#E67E22", "#0F8B8D"
     fig, axes = plt.subplots(
         1,
-        2,
-        figsize=(13.0, 5.4),
-        gridspec_kw={"width_ratios": [0.78, 1.52]},
+        3,
+        figsize=(13.2, 4.9),
+        gridspec_kw={"width_ratios": [0.82, 1.08, 1.46]},
         constrained_layout=True,
     )
 
@@ -262,48 +335,65 @@ def make_figure(family_summary: pd.DataFrame, variable_summary: pd.DataFrame) ->
         edgecolor="white",
     )
     axes[0].axhline(0, color="#586574", linestyle="--", linewidth=1.2)
-    axes[0].set_xticks([0, 1], ["Excluded S", "Excluded A"])
-    axes[0].set_ylabel("Mean paired RMSE change (%)")
-    axes[0].set_title("(a) Matched marginal holdout", loc="left", weight="bold", color=navy)
+    axes[0].set_xticks([0, 1], ["Add retained S", "Add retained A"])
+    axes[0].tick_params(axis="x", labelrotation=12)
+    axes[0].set_ylabel("Mean RMSE change at excluded observations (%)")
+    axes[0].set_title(
+        "(a) Source-level effects", loc="left", color=navy, fontsize=14, pad=27
+    )
+    axes[0].text(
+        0.0,
+        1.01,
+        "Mean across target variables",
+        transform=axes[0].transAxes,
+        ha="left",
+        va="bottom",
+        fontsize=11.5,
+        color="#4B5563",
+    )
     axes[0].grid(axis="y", alpha=0.22)
     for index, value in enumerate(means):
-        axes[0].text(index, value - 0.7, f"{value:.2f}%", ha="center", va="top", color="white", weight="bold")
-
-    order = SURFACE_ORDER + AIRCRAFT_ORDER
-    selected = variable_summary[variable_summary["method"].eq("heldout80")].set_index("variable")
-    y = np.arange(len(order))
-    for index, variable in enumerate(order):
-        row = selected.loc[variable]
-        value = row["mean_effect_pct"]
-        axes[1].errorbar(
-            value,
+        axes[0].text(
             index,
-            xerr=[[value - row["ci95_low_pct"]], [row["ci95_high_pct"] - value]],
-            fmt="o",
-            color=teal if variable in SURFACE_ORDER else orange,
-            ecolor=teal if variable in SURFACE_ORDER else orange,
-            capsize=3,
-            markersize=6,
+            value / 2,
+            f"{value:.2f}%",
+            ha="center",
+            va="center",
+            color="white",
+            weight="bold",
         )
-        if index % 2 == 0:
-            axes[1].axhspan(index - 0.5, index + 0.5, color="#F3F6F9", zorder=-5)
-    axes[1].axvline(0, color="#586574", linestyle="--", linewidth=1.2)
-    axes[1].set_yticks(y, [SHORT[name] for name in order])
-    axes[1].invert_yaxis()
-    axes[1].set_xlabel("Mean paired RMSE change at excluded targets (%)")
-    axes[1].set_title("(b) Variable-level effects", loc="left", weight="bold", color=navy)
-    axes[1].grid(axis="x", alpha=0.22)
-    axes[1].scatter([], [], color=teal, label="Surface-station targets")
-    axes[1].scatter([], [], color=orange, label="Aircraft targets")
-    axes[1].legend(frameon=True, loc="lower left")
+    for spine in ("top", "right"):
+        axes[0].spines[spine].set_visible(False)
 
-    fig.suptitle(
-        "Interfaces selected with 2019 data improve 2020 observations excluded from conditioning",
-        fontsize=15,
-        weight="bold",
-        color=navy,
+    selected = variable_summary[variable_summary["method"].eq("heldout80")].set_index("variable")
+    lows = variable_summary["ci95_low_pct"].to_numpy(dtype=float)
+    highs = variable_summary["ci95_high_pct"].to_numpy(dtype=float)
+    data_min = min(float(lows.min()), 0.0)
+    data_max = max(float(highs.max()), 0.0)
+    padding = max(1.5, 0.08 * (data_max - data_min))
+    x_limits = (data_min - padding, data_max + padding)
+    forest_axis(
+        axes[1],
+        selected,
+        SURFACE_ORDER,
+        teal,
+        "(b) Surface-station targets",
+        "Retained S added to R+A",
+        x_limits,
     )
-    fig.savefig(output, dpi=260)
+    forest_axis(
+        axes[2],
+        selected,
+        AIRCRAFT_ORDER,
+        orange,
+        "(c) Aircraft targets",
+        "Retained A added to R+S",
+        x_limits,
+    )
+    axes[1].set_xlabel("RMSE change at excluded observations (%)")
+    axes[2].set_xlabel("RMSE change at excluded observations (%)")
+    fig.savefig(output, bbox_inches="tight")
+    fig.savefig(output.with_suffix(".png"), dpi=300, bbox_inches="tight")
     plt.close(fig)
     return output
 
@@ -314,18 +404,19 @@ def write_readme(family_summary: pd.DataFrame, variable_summary: pd.DataFrame, f
     aircraft = heldout.loc["aircraft"]
     text = f"""# Matched-marginal evaluation at observations excluded from conditioning
 
-This analysis summarizes the completed 2020 holdout runs.
-It replaces the earlier R-only pooled comparison with the matched marginal
-baselines required by the manuscript design:
+This analysis summarizes the completed 2020 held-out-observation runs over the
+CONUS domain. The matched comparisons are:
 
 - excluded S: `R+A+0.8S` versus `R+A`;
 - excluded A: `R+0.8A+S` versus `R+S`.
 
-For each of the 24 prespecified 2020 diagnostic cases, RMSE is computed at the
-same held-out ERA5 cell-variable targets. Percentage changes are formed within
-each timestep and variable, then averaged with equal variable and timestep
-weight. The 95% intervals use {BOOTSTRAP_REPLICATES:,} paired-timestep bootstrap
-replicates with seed {BOOTSTRAP_SEED}.
+For each of the 24 prespecified 2020 diagnostic cases, the split is first
+restricted to observations whose native coordinates lie within CONUS. RMSE is
+then computed at the same excluded ERA5 cell-variable targets. Percentage
+changes are formed within each analysis time and variable, then averaged with
+equal variable and analysis-time weight. The 95% intervals use
+{BOOTSTRAP_REPLICATES:,} paired-analysis-time bootstrap replicates with seed
+{BOOTSTRAP_SEED}.
 
 ## Headline effects
 
@@ -355,6 +446,10 @@ def main() -> None:
     TABLES.mkdir(parents=True, exist_ok=True)
     FIGURES.mkdir(parents=True, exist_ok=True)
     targets = pd.read_csv(HOLDOUT_TARGETS)
+    if "spatial_domain" not in targets or set(targets["spatial_domain"]) != {"CONUS"}:
+        raise RuntimeError(
+            "Held-out targets must explicitly identify the CONUS spatial domain"
+        )
     rmse = attach_predictions(targets)
     effects = paired_effects(rmse)
     variable_summary = summarize_variables(effects)

@@ -184,7 +184,8 @@ def plot_spectra(table: pd.DataFrame) -> None:
 
 def main() -> None:
     configure_plotting()
-    OUT_TABLE.mkdir(exist_ok=True)
+    OUT_TABLE.mkdir(parents=True, exist_ok=True)
+    OUT_FIG.mkdir(parents=True, exist_ok=True)
     cached_table = OUT_TABLE / "conus_spatial_spectral_shape_2020.csv"
     if cached_table.exists():
         plot_spectra(pd.read_csv(cached_table))
