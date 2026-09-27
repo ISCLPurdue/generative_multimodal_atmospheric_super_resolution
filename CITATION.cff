@@ -1,6 +1,6 @@
 cff-version: 1.2.0
-message: "Please cite this software release and the associated manuscript."
-title: "Generative Atmospheric Super-Resolution across Heterogeneous Observing Systems through Composable Interfaces"
+message: "If you use this software in research, please cite the associated paper below."
+title: "Generative Atmospheric Super-Resolution from Heterogeneous In Situ Observations through Composable Interfaces"
 type: software
 version: 1.0.5
 date-released: 2026-09-16
@@ -17,3 +17,20 @@ authors:
   - family-names: Maulik
     given-names: Romit
 repository-code: "https://github.com/ISCLPurdue/generative_multimodal_atmospheric_super_resolution"
+preferred-citation:
+  type: article
+  title: "Generative Atmospheric Super-Resolution from Heterogeneous In Situ Observations through Composable Interfaces"
+  authors:
+    - family-names: Xu
+      given-names: Yang
+    - family-names: Chakraborty
+      given-names: Dibyajyoti
+    - family-names: Guan
+      given-names: Haiwen
+    - family-names: Wang
+      given-names: Sen
+    - family-names: Maulik
+      given-names: Romit
+  year: 2026
+  doi: "10.48550/arXiv.2609.29027"
+  url: "https://arxiv.org/abs/2609.29027"
