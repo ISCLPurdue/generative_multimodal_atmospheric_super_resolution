@@ -217,14 +217,16 @@ class ReleaseConfigurationTests(unittest.TestCase):
             readme,
         )
 
-    def test_release_citation_uses_exact_manuscript_title_without_doi(self):
+    def test_release_citation_uses_final_title_and_arxiv_preferred_citation(self):
         citation = (REPO_ROOT / "CITATION.cff").read_text(encoding="utf-8")
         self.assertIn(
-            "Generative Atmospheric Super-Resolution across Heterogeneous "
-            "Observing Systems through Composable Interfaces",
+            "Generative Atmospheric Super-Resolution from Heterogeneous In Situ "
+            "Observations through Composable Interfaces",
             citation,
         )
-        self.assertNotIn("doi:", citation.lower())
+        self.assertIn("preferred-citation:", citation)
+        self.assertIn('doi: "10.48550/arXiv.2609.29027"', citation)
+        self.assertIn('url: "https://arxiv.org/abs/2609.29027"', citation)
         self.assertIn("version: 1.0.5", citation)
         self.assertIn("date-released: 2026-09-16", citation)
         self.assertIn("license: MIT", citation)
