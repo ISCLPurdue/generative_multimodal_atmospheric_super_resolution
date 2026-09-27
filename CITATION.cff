@@ -2,20 +2,37 @@ cff-version: 1.2.0
 message: "If you use this software in research, please cite the associated paper below."
 title: "Generative Atmospheric Super-Resolution from Heterogeneous In Situ Observations through Composable Interfaces"
 type: software
-version: 1.0.5
-date-released: 2026-09-16
+version: 1.0.6
+date-released: 2026-09-27
 license: MIT
+abstract: >-
+  Research code and experiment metadata for conditioning a fixed 13-variable
+  atmospheric diffusion prior on radiosonde, aircraft, and surface-station
+  observations through composable observation interfaces.
+keywords:
+  - atmospheric science
+  - data assimilation
+  - diffusion models
+  - generative models
+  - posterior sampling
+  - super-resolution
+  - weather
 authors:
   - family-names: Xu
     given-names: Yang
+    affiliation: Purdue University
   - family-names: Chakraborty
     given-names: Dibyajyoti
+    affiliation: Pennsylvania State University
   - family-names: Guan
     given-names: Haiwen
+    affiliation: Pennsylvania State University
   - family-names: Wang
     given-names: Sen
+    affiliation: Purdue University
   - family-names: Maulik
     given-names: Romit
+    affiliation: Purdue University
 repository-code: "https://github.com/ISCLPurdue/generative_multimodal_atmospheric_super_resolution"
 preferred-citation:
   type: article
