@@ -1,15 +1,18 @@
-# Generative Atmospheric Super-Resolution across Heterogeneous Observing Systems through Composable Interfaces
+# Generative Atmospheric Super-Resolution from Heterogeneous In Situ Observations through Composable Interfaces
 
+[Paper](https://arxiv.org/abs/2609.29027)
+·
 [Data and model inputs](DATA.md)
 · [Reproduction](reproduction/README.md)
 · [Reported analyses](analysis/README.md)
 · [Citation](#citation)
 
 This repository provides the research code and experiment metadata supporting
-the manuscript *Generative Atmospheric Super-Resolution across Heterogeneous
-Observing Systems through Composable Interfaces*. It implements diffusion
-posterior sampling with a fixed 13-variable atmospheric diffusion prior and
-three observation sources:
+the preprint [*Generative Atmospheric Super-Resolution from Heterogeneous In
+Situ Observations through Composable
+Interfaces*](https://arxiv.org/abs/2609.29027). It implements diffusion posterior
+sampling with a fixed 13-variable atmospheric diffusion prior and three
+observation sources:
 
 - **R:** radiosonde profiles from the Integrated Global Radiosonde Archive
   (IGRA);
@@ -124,10 +127,17 @@ self-contained data-and-model distribution.
 
 ## Citation
 
-Citation metadata are provided in [`CITATION.cff`](CITATION.cff). For a fixed
-software snapshot, please cite the GitHub release associated with the version
-used.
-The associated manuscript citation will be added after the preprint is posted.
+If this repository supports your research, please cite the associated
+[preprint](https://arxiv.org/abs/2609.29027):
+
+> Yang Xu, Dibyajyoti Chakraborty, Haiwen Guan, Sen Wang, and Romit Maulik.
+> "Generative Atmospheric Super-Resolution from Heterogeneous In Situ
+> Observations through Composable Interfaces." arXiv:2609.29027 (2026).
+> <https://doi.org/10.48550/arXiv.2609.29027>
+
+Machine-readable metadata are provided in [`CITATION.cff`](CITATION.cff), with
+the paper set as the preferred citation. For exact reproducibility, also record
+the software version and Git commit used.
 
 ## License
 
