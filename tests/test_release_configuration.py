@@ -217,6 +217,19 @@ class ReleaseConfigurationTests(unittest.TestCase):
             readme,
         )
 
+    def test_readme_acknowledges_manuscript_funding_and_resources(self):
+        readme = (REPO_ROOT / "README.md").read_text(encoding="utf-8")
+        normalized_readme = " ".join(readme.split())
+        for required_text in (
+            "Rosen Center for Advanced Computing",
+            "Integrated Global Radiosonde Archive",
+            "Meteorological Assimilation Data Ingest System",
+            "Copernicus Climate Change Service",
+            "HR0011-26-3-E050",
+            "W911NF-24-1-0315",
+        ):
+            self.assertIn(required_text, normalized_readme)
+
     def test_release_citation_uses_final_title_and_arxiv_preferred_citation(self):
         citation = (REPO_ROOT / "CITATION.cff").read_text(encoding="utf-8")
         self.assertIn(
