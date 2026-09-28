@@ -145,8 +145,18 @@ This project is released under the [MIT License](LICENSE).
 
 ## Acknowledgments
 
-We acknowledge support from DARPA Award HR0011-26-3-E050 (POC: Yannis
-Kevrekidis).
+Computations were performed using resources provided by Purdue University's
+Rosen Center for Advanced Computing. The authors acknowledge NOAA for the
+Integrated Global Radiosonde Archive and Meteorological Assimilation Data
+Ingest System observations, and the Copernicus Climate Change Service for the
+ERA5 reanalysis.
+
+This work was supported in part by the Defense Advanced Research Projects
+Agency (DARPA) under Award No. HR0011-26-3-E050 (program point of contact:
+Dr. Yannis Kevrekidis) and the Army Research Office (ARO) Young Investigator
+Award W911NF-24-1-0315 (program point of contact: Dr. Robert Martin). The
+funders played no role in study design, data collection, analysis and
+interpretation of data, or the writing of the manuscript.
 
 ## Authors
 
